@@ -27,12 +27,45 @@ def _extract_link_id(link_field) -> str | None:
     return None
 
 
-def _timetable_out(t: Timetable) -> dict:
+async def _timetable_out(t: Timetable) -> dict:
+    program_id = _extract_link_id(t.program) or ""
+    batch_id = _extract_link_id(t.batch) or ""
+    semester_id = _extract_link_id(t.semester) or ""
+
+    # Resolve human-readable names
+    program_name = ""
+    batch_name = ""
+    semester_name = ""
+    try:
+        if program_id:
+            prog = await Program.get(PydanticObjectId(program_id))
+            if prog:
+                program_name = prog.name
+    except Exception:
+        pass
+    try:
+        if batch_id:
+            b = await Batch.get(PydanticObjectId(batch_id))
+            if b:
+                batch_name = b.name
+    except Exception:
+        pass
+    try:
+        if semester_id:
+            sem = await Semester.get(PydanticObjectId(semester_id))
+            if sem:
+                semester_name = str(sem.number) if hasattr(sem, 'number') else sem.name
+    except Exception:
+        pass
+
     return {
         "id": str(t.id),
-        "program_id": _extract_link_id(t.program) or "",
-        "batch_id": _extract_link_id(t.batch) or "",
-        "semester_id": _extract_link_id(t.semester) or "",
+        "program_id": program_id,
+        "batch_id": batch_id,
+        "semester_id": semester_id,
+        "program_name": program_name,
+        "batch_name": batch_name,
+        "semester_name": semester_name,
         "entries": [
             {
                 "entry_id": e.entry_id,
@@ -66,7 +99,7 @@ async def get_all_timetables(
     results = []
     for t in timetables:
         try:
-            results.append(_timetable_out(t))
+            results.append(await _timetable_out(t))
         except Exception:
             logging.warning(f"Skipping corrupt timetable {t.id}")
     return results
@@ -154,7 +187,7 @@ async def generate_timetable(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Save error: {str(e)}")
     
-    return _timetable_out(new_timetable)
+    return await _timetable_out(new_timetable)
 
 
 @router.post("/simulate", response_model=Any)
@@ -209,7 +242,7 @@ async def get_timetable(
     timetable = await Timetable.get(id)
     if not timetable:
         raise HTTPException(status_code=404, detail="Timetable not found.")
-    return _timetable_out(timetable)
+    return await _timetable_out(timetable)
 
 @router.patch("/{id}", response_model=TimetableOut)
 async def update_timetable_entry(
@@ -270,6 +303,6 @@ async def update_timetable_entry(
         entry_to_move.room_id = new_room_id
         
         await timetable.save()
-        return _timetable_out(timetable)
+        return await _timetable_out(timetable)
 
     raise HTTPException(status_code=400, detail="Invalid action.")

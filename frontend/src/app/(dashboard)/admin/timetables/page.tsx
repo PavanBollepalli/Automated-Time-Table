@@ -43,9 +43,9 @@ export default function TimetablesPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-4 mb-4 text-sm">
-              <div><span className="text-muted-foreground">Program:</span> <span className="font-medium">{selectedTT.program || "—"}</span></div>
-              <div><span className="text-muted-foreground">Batch:</span> <span className="font-medium">{selectedTT.batch || "—"}</span></div>
-              <div><span className="text-muted-foreground">Semester:</span> <span className="font-medium">{selectedTT.semester || "—"}</span></div>
+              <div><span className="text-muted-foreground">Program:</span> <span className="font-medium">{selectedTT.program_name || "—"}</span></div>
+              <div><span className="text-muted-foreground">Batch:</span> <span className="font-medium">{selectedTT.batch_name || "—"}</span></div>
+              <div><span className="text-muted-foreground">Semester:</span> <span className="font-medium">{selectedTT.semester_name || "—"}</span></div>
               <div><span className="text-muted-foreground">Entries:</span> <span className="font-medium">{selectedTT.entries?.length || 0}</span></div>
               {selectedTT.is_draft && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">Draft</span>}
             </div>
@@ -71,9 +71,9 @@ export default function TimetablesPage() {
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                   <div>
-                    <h3 className="font-semibold">Program: {t.program || "—"}</h3>
-                    <p className="text-sm text-muted-foreground">Batch: {t.batch || "—"}</p>
-                    <p className="text-sm text-muted-foreground">Semester: {t.semester || "—"}</p>
+                    <h3 className="font-semibold">Program: {t.program_name || "—"}</h3>
+                    <p className="text-sm text-muted-foreground">Batch: {t.batch_name || "—"}</p>
+                    <p className="text-sm text-muted-foreground">Semester: {t.semester_name || "—"}</p>
                   </div>
                   {t.is_draft && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">Draft</span>}
                 </div>

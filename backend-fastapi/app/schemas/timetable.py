@@ -38,6 +38,9 @@ class TimetableOut(BaseModel):
     program_id: str
     batch_id: str
     semester_id: str
+    program_name: str = ""
+    batch_name: str = ""
+    semester_name: str = ""
     entries: List[TimetableEntryOut] = []
     is_draft: bool = True
 
