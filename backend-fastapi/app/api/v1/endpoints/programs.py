@@ -1,33 +1,55 @@
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
 from app.api import deps
-from app.models.programs import Program, Batch, Semester
+from app.models.programs import Program, Batch, Semester, Section
 from app.models.users import User
 from app.schemas.programs import (
-    ProgramCreate, ProgramOut, BatchCreate, BatchOut, SemesterCreate, SemesterOut
+    ProgramCreate, ProgramOut, BatchCreate, BatchOut, SemesterCreate, SemesterOut,
+    SectionCreate, SectionOut
 )
 
 router = APIRouter()
 
 
-def _batch_out(b: Batch) -> dict:
+def _section_out(s: Section) -> dict:
+    return {
+        "id": str(s.id),
+        "name": s.name,
+        "student_count": s.student_count,
+    }
+
+
+async def _batch_out(b: Batch) -> dict:
+    sections = []
+    for link in (b.sections or []):
+        if isinstance(link, Section):
+            sections.append(_section_out(link))
+        else:
+            sec_id = None
+            if hasattr(link, "ref"):
+                sec_id = link.ref.id if hasattr(link.ref, "id") else link.ref
+            elif hasattr(link, "id"):
+                sec_id = link.id
+            if sec_id:
+                sec = await Section.get(sec_id)
+                if sec:
+                    sections.append(_section_out(sec))
     return {
         "id": str(b.id),
         "name": b.name,
         "start_year": b.start_year,
         "end_year": b.end_year,
         "current_semester": None,
+        "sections": sections,
     }
 
 
 async def _program_out(p: Program) -> dict:
-    # Manually resolve batch links instead of fetch_all_links (motor compat issue)
     batches = []
     for link in (p.batches or []):
         if isinstance(link, Batch):
-            batches.append(_batch_out(link))
+            batches.append(await _batch_out(link))
         else:
-            # It's an unresolved Link – extract the id and fetch manually
             batch_id = None
             if hasattr(link, "ref"):
                 batch_id = link.ref.id if hasattr(link.ref, "id") else link.ref
@@ -36,7 +58,7 @@ async def _program_out(p: Program) -> dict:
             if batch_id:
                 batch = await Batch.get(batch_id)
                 if batch:
-                    batches.append(_batch_out(batch))
+                    batches.append(await _batch_out(batch))
     return {
         "id": str(p.id),
         "name": p.name,
@@ -85,7 +107,7 @@ async def create_batch(
     program.batches.append(batch)
     await program.save()
 
-    return _batch_out(batch)
+    return await _batch_out(batch)
 
 
 # Semesters
@@ -173,3 +195,73 @@ async def delete_semester(
         raise HTTPException(status_code=404, detail="Semester not found")
     await semester.delete()
     return {"detail": "Semester deleted"}
+
+
+# Sections
+@router.post("/{program_id}/batches/{batch_id}/sections", response_model=SectionOut)
+async def create_section(
+    program_id: str,
+    batch_id: str,
+    section_in: SectionCreate,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    batch = await Batch.get(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    section = Section(**section_in.model_dump())
+    await section.insert()
+    batch.sections.append(section)
+    await batch.save()
+    return _section_out(section)
+
+
+@router.get("/{program_id}/batches/{batch_id}/sections", response_model=List[SectionOut])
+async def list_sections(
+    program_id: str,
+    batch_id: str,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    batch = await Batch.get(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    sections = []
+    for link in (batch.sections or []):
+        if isinstance(link, Section):
+            sections.append(_section_out(link))
+        else:
+            sec_id = None
+            if hasattr(link, "ref"):
+                sec_id = link.ref.id if hasattr(link.ref, "id") else link.ref
+            elif hasattr(link, "id"):
+                sec_id = link.id
+            if sec_id:
+                sec = await Section.get(sec_id)
+                if sec:
+                    sections.append(_section_out(sec))
+    return sections
+
+
+@router.delete("/{program_id}/batches/{batch_id}/sections/{section_id}")
+async def delete_section(
+    program_id: str,
+    batch_id: str,
+    section_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    batch = await Batch.get(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    section = await Section.get(section_id)
+    if not section:
+        raise HTTPException(status_code=404, detail="Section not found")
+    batch.sections = [
+        s for s in (batch.sections or [])
+        if not (
+            (isinstance(s, Section) and str(s.id) == section_id)
+            or (hasattr(s, "ref") and str(getattr(s.ref, "id", s.ref)) == section_id)
+            or (hasattr(s, "id") and str(s.id) == section_id)
+        )
+    ]
+    await batch.save()
+    await section.delete()
+    return {"detail": "Section deleted"}

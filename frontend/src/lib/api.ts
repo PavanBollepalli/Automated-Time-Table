@@ -89,6 +89,22 @@ export const deleteSemester = async (id: string) => {
   return data;
 };
 
+// ─── Sections ───
+export const getSections = async (programId: string, batchId: string) => {
+  const { data } = await apiClient.get(`/programs/${programId}/batches/${batchId}/sections`);
+  return data;
+};
+
+export const createSection = async (programId: string, batchId: string, section: { name: string; student_count: number }) => {
+  const { data } = await apiClient.post(`/programs/${programId}/batches/${batchId}/sections`, section);
+  return data;
+};
+
+export const deleteSection = async (programId: string, batchId: string, sectionId: string) => {
+  const { data } = await apiClient.delete(`/programs/${programId}/batches/${batchId}/sections/${sectionId}`);
+  return data;
+};
+
 // ─── Courses ───
 export const getCourses = async () => {
   const { data } = await apiClient.get("/courses/");
@@ -161,11 +177,12 @@ export const getTimetable = async (id: string) => {
   return data;
 };
 
-export const generateTimetable = async (programId: string, batchId: string, semesterId: string) => {
+export const generateTimetable = async (programId: string, batchId: string, semesterId: string, sectionIds?: string[]) => {
   const { data } = await apiClient.post("/timetables/generate", {
     program_id: programId,
     batch_id: batchId,
     semester_id: semesterId,
+    section_ids: sectionIds || undefined,
   });
   return data;
 };

@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPrograms, createProgram, createBatch, createSemester } from "@/lib/api";
-import { Loader2, Plus, GraduationCap } from "lucide-react";
+import { getPrograms, createProgram, createBatch, createSemester, createSection, deleteSection } from "@/lib/api";
+import { Loader2, Plus, GraduationCap, Users, Trash2 } from "lucide-react";
 
 export default function DeoProgramsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
@@ -14,6 +14,8 @@ export default function DeoProgramsPage() {
   const [showForm, setShowForm] = useState(false);
   const [showBatchForm, setShowBatchForm] = useState<string | null>(null);
   const [showSemForm, setShowSemForm] = useState(false);
+  const [showSectionForm, setShowSectionForm] = useState<{programId:string;batchId:string}|null>(null);
+  const [sectionForm, setSectionForm] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<any>({});
@@ -37,6 +39,16 @@ export default function DeoProgramsPage() {
     e.preventDefault(); setSubmitting(true); setError("");
     try { await createSemester({ name: semForm.name, number: parseInt(semForm.number) }); setShowSemForm(false); setSemForm({}); }
     catch (err: any) { setError(err?.response?.data?.detail || "Failed"); } finally { setSubmitting(false); }
+  };
+  const handleCreateSection = async (e: React.FormEvent) => {
+    e.preventDefault(); if (!showSectionForm) return; setSubmitting(true); setError("");
+    try { await createSection(showSectionForm.programId, showSectionForm.batchId, { name: sectionForm.name, student_count: parseInt(sectionForm.student_count || "0") }); setShowSectionForm(null); setSectionForm({}); load(); }
+    catch (err: any) { setError(err?.response?.data?.detail || "Failed"); } finally { setSubmitting(false); }
+  };
+  const handleDeleteSection = async (programId: string, batchId: string, sectionId: string) => {
+    if (!confirm("Delete this section?")) return;
+    try { await deleteSection(programId, batchId, sectionId); load(); }
+    catch (err: any) { setError(err?.response?.data?.detail || "Failed"); }
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -86,6 +98,16 @@ export default function DeoProgramsPage() {
           </form>
         </CardContent></Card>
       )}
+      {showSectionForm && (
+        <Card><CardHeader><CardTitle>Add Section</CardTitle></CardHeader><CardContent>
+          <form onSubmit={handleCreateSection} className="flex gap-3 items-end flex-wrap">
+            <div className="space-y-1"><Label>Section Name</Label><Input placeholder="A" value={sectionForm.name||""} onChange={e=>setSectionForm({...sectionForm,name:e.target.value})} required /></div>
+            <div className="space-y-1"><Label>Student Count</Label><Input type="number" placeholder="60" value={sectionForm.student_count||""} onChange={e=>setSectionForm({...sectionForm,student_count:e.target.value})} /></div>
+            <Button type="submit" disabled={submitting}>{submitting?<Loader2 className="h-4 w-4 animate-spin mr-1"/>:null}Create</Button>
+            <Button type="button" variant="outline" onClick={()=>setShowSectionForm(null)}>Cancel</Button>
+          </form>
+        </CardContent></Card>
+      )}
       {programs.length===0?(
         <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <GraduationCap className="h-12 w-12 text-muted-foreground/50 mb-4" /><h3 className="text-lg font-semibold">No programs yet</h3><p className="text-muted-foreground text-sm mt-1">Add your first program</p>
@@ -96,7 +118,7 @@ export default function DeoProgramsPage() {
             <div className="flex items-start justify-between"><div><h3 className="font-semibold text-lg">{p.name}</h3><p className="text-sm text-muted-foreground font-mono">{p.code}</p></div>
               <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{p.type}</span></div>
             <p className="text-sm text-muted-foreground mt-2">{p.duration_years} years</p>
-            {p.batches?.length>0&&(<div className="mt-3"><p className="text-xs font-medium text-muted-foreground mb-1">Batches:</p><div className="flex flex-wrap gap-1">{p.batches.map((b:any)=>(<span key={b.id||b._id} className="text-xs bg-muted px-2 py-0.5 rounded">{b.name}</span>))}</div></div>)}
+            {p.batches?.length>0&&(<div className="mt-3 space-y-2">{p.batches.map((b:any)=>(<div key={b.id||b._id} className="border rounded-lg p-3"><div className="flex items-center justify-between"><span className="text-sm font-medium">{b.name} ({b.start_year}–{b.end_year})</span><Button variant="ghost" size="sm" onClick={()=>{setShowSectionForm({programId:p.id||p._id,batchId:b.id||b._id});setError("")}}><Plus className="h-3 w-3 mr-1"/>Section</Button></div>{b.sections?.length>0?(<div className="flex flex-wrap gap-1 mt-2">{b.sections.map((s:any)=>(<span key={s.id} className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full inline-flex items-center gap-1"><Users className="h-3 w-3"/>Section {s.name}{s.student_count>0&&` (${s.student_count})`}<button onClick={()=>handleDeleteSection(p.id||p._id,b.id||b._id,s.id)} className="ml-1 hover:text-destructive"><Trash2 className="h-3 w-3"/></button></span>))}</div>):(<p className="text-xs text-muted-foreground mt-1">No sections – add sections for per-section timetabling</p>)}</div>))}</div>)}
             <Button variant="outline" size="sm" className="mt-3" onClick={()=>{setShowBatchForm(p.id||p._id);setError("")}}>+ Add Batch</Button>
           </CardContent></Card>
         ))}</div>

@@ -2,7 +2,7 @@ from typing import List, Optional, Any
 from beanie import Document, Link
 from pydantic import BaseModel
 from datetime import datetime
-from app.models.programs import Program, Batch, Semester
+from app.models.programs import Program, Batch, Semester, Section
 
 class TimetableEntry(BaseModel):
     entry_id: str = ""
@@ -14,12 +14,15 @@ class TimetableEntry(BaseModel):
     faculty_name: str
     room_id: str
     room_name: str
-    batch_id: str # For sectioning
+    batch_id: str
+    section_id: str = ""
+    section_name: str = ""
 
 class Timetable(Document):
     program: Link[Program]
     batch: Link[Batch]
     semester: Link[Semester]
+    section: Optional[Link[Section]] = None
     
     entries: List[TimetableEntry] = []
     

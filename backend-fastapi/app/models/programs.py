@@ -10,11 +10,19 @@ class Semester(Document):
     class Settings:
         name = "semesters"
 
+class Section(Document):
+    name: str  # e.g., "A", "B", "C"
+    student_count: int = 0
+    
+    class Settings:
+        name = "sections"
+
 class Batch(Document):
     name: str # e.g., "2024-2028"
     start_year: int
     end_year: int
     current_semester: Optional[Link[Semester]] = None
+    sections: List[Link[Section]] = []
     
     class Settings:
         name = "batches"

@@ -1,5 +1,6 @@
 from typing import Any, List
 import logging
+import traceback
 from fastapi import APIRouter, Depends, HTTPException
 from beanie.odm.fields import PydanticObjectId
 import uuid
@@ -9,7 +10,7 @@ from app.models.users import User
 from app.models.faculty import Faculty
 from app.models.courses import Course
 from app.models.infrastructure import Room
-from app.models.programs import Program, Batch, Semester
+from app.models.programs import Program, Batch, Semester, Section
 from app.models.timetable import Timetable, TimetableEntry
 from app.schemas.timetable import TimetableOut, TimetableUpdateRequest, SimulationRequest, TimetableGenerateRequest, TimetableEntryOut
 from app.services.generator import TimetableGenerator
@@ -31,11 +32,13 @@ async def _timetable_out(t: Timetable) -> dict:
     program_id = _extract_link_id(t.program) or ""
     batch_id = _extract_link_id(t.batch) or ""
     semester_id = _extract_link_id(t.semester) or ""
+    section_id = _extract_link_id(t.section) or ""
 
     # Resolve human-readable names
     program_name = ""
     batch_name = ""
     semester_name = ""
+    section_name = ""
     try:
         if program_id:
             prog = await Program.get(PydanticObjectId(program_id))
@@ -57,15 +60,24 @@ async def _timetable_out(t: Timetable) -> dict:
                 semester_name = str(sem.number) if hasattr(sem, 'number') else sem.name
     except Exception:
         pass
+    try:
+        if section_id:
+            sec = await Section.get(PydanticObjectId(section_id))
+            if sec:
+                section_name = sec.name
+    except Exception:
+        pass
 
     return {
         "id": str(t.id),
         "program_id": program_id,
         "batch_id": batch_id,
         "semester_id": semester_id,
+        "section_id": section_id,
         "program_name": program_name,
         "batch_name": batch_name,
         "semester_name": semester_name,
+        "section_name": section_name,
         "entries": [
             {
                 "entry_id": e.entry_id,
@@ -78,6 +90,8 @@ async def _timetable_out(t: Timetable) -> dict:
                 "room_id": e.room_id,
                 "room_name": e.room_name,
                 "batch_id": e.batch_id,
+                "section_id": getattr(e, "section_id", ""),
+                "section_name": getattr(e, "section_name", ""),
             }
             for e in (t.entries or [])
         ],
@@ -110,7 +124,9 @@ async def generate_timetable(
     current_user: User = Depends(deps.get_current_admin_user),
 ) -> Any:
     """
-    Generate a new timetable, save it, and return it.
+    Generate timetables for all sections in a batch (or specific sections).
+    Creates one timetable per section, all scheduled together to avoid conflicts.
+    Returns the first timetable; all are saved.
     """
     program = await Program.get(gen_request.program_id)
     batch = await Batch.get(gen_request.batch_id)
@@ -118,7 +134,30 @@ async def generate_timetable(
     if not all([program, batch, semester]):
         raise HTTPException(status_code=404, detail="Program, Batch, or Semester not found.")
 
-    # Use raw MongoDB field matching – Beanie Link query helpers are unreliable
+    # Resolve sections for this batch
+    sections_to_schedule: List[Section] = []
+    if gen_request.section_ids:
+        for sid in gen_request.section_ids:
+            sec = await Section.get(sid)
+            if sec:
+                sections_to_schedule.append(sec)
+    else:
+        # Get all sections from batch
+        for link in (batch.sections or []):
+            sec_id = None
+            if isinstance(link, Section):
+                sections_to_schedule.append(link)
+                continue
+            if hasattr(link, "ref"):
+                sec_id = link.ref.id if hasattr(link.ref, "id") else link.ref
+            elif hasattr(link, "id"):
+                sec_id = link.id
+            if sec_id:
+                sec = await Section.get(sec_id)
+                if sec:
+                    sections_to_schedule.append(sec)
+
+    # Use raw MongoDB field matching
     courses = await Course.find(
         {"program.$id": program.id, "semester.$id": semester.id}
     ).to_list()
@@ -136,7 +175,8 @@ async def generate_timetable(
         courses=courses,
         faculty=faculty,
         rooms=rooms,
-        batches=[batch]
+        batches=[batch],
+        sections=sections_to_schedule if sections_to_schedule else None,
     )
     try:
         best_chromosome = generator.run()
@@ -145,7 +185,6 @@ async def generate_timetable(
         raise HTTPException(status_code=500, detail=f"Generator error: {str(e)}")
 
     if best_chromosome.fitness < 0:
-        # Check if there are any HARD conflicts (the ones that truly prevent usage)
         hard_conflicts = [c for c in best_chromosome.conflicts if c.startswith("Hard:")]
         if hard_conflicts:
             raise HTTPException(
@@ -157,37 +196,57 @@ async def generate_timetable(
     course_map = {str(c.id): c for c in courses}
     faculty_map = {str(f.id): f for f in faculty}
     room_map = {str(r.id): r for r in rooms}
+    section_map = {str(s.id): s for s in sections_to_schedule} if sections_to_schedule else {}
     
-    entries = []
+    # Group genes by section_id to create per-section timetables
+    genes_by_section: dict[str, list] = {}
     for gene in best_chromosome.genes:
-        entry = TimetableEntry(
-            entry_id=str(uuid.uuid4()),
-            day=gene.day,
-            period=gene.period,
-            course_id=gene.course_id,
-            course_name=course_map.get(gene.course_id).name if course_map.get(gene.course_id) else "N/A",
-            faculty_id=gene.faculty_id,
-            faculty_name=faculty_map.get(gene.faculty_id).name if faculty_map.get(gene.faculty_id) else "N/A",
-            room_id=gene.room_id,
-            room_name=room_map.get(gene.room_id).name if room_map.get(gene.room_id) else "N/A",
-            batch_id=gene.batch_id
-        )
-        entries.append(entry)
-
-    new_timetable = Timetable(
-        program=program,
-        batch=batch,
-        semester=semester,
-        entries=entries,
-        is_draft=False
-    )
-    try:
-        await new_timetable.insert()
-    except Exception as e:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Save error: {str(e)}")
+        sec_key = gene.section_id or gene.batch_id
+        genes_by_section.setdefault(sec_key, []).append(gene)
     
-    return await _timetable_out(new_timetable)
+    saved_timetables = []
+    
+    for sec_key, genes in genes_by_section.items():
+        entries = []
+        sec_obj = section_map.get(sec_key)
+        sec_name = sec_obj.name if sec_obj else ""
+        
+        for gene in genes:
+            entry = TimetableEntry(
+                entry_id=str(uuid.uuid4()),
+                day=gene.day,
+                period=gene.period,
+                course_id=gene.course_id,
+                course_name=course_map.get(gene.course_id).name if course_map.get(gene.course_id) else "N/A",
+                faculty_id=gene.faculty_id,
+                faculty_name=faculty_map.get(gene.faculty_id).name if faculty_map.get(gene.faculty_id) else "N/A",
+                room_id=gene.room_id,
+                room_name=room_map.get(gene.room_id).name if room_map.get(gene.room_id) else "N/A",
+                batch_id=gene.batch_id,
+                section_id=gene.section_id,
+                section_name=sec_name,
+            )
+            entries.append(entry)
+
+        new_timetable = Timetable(
+            program=program,
+            batch=batch,
+            semester=semester,
+            section=sec_obj if sec_obj else None,
+            entries=entries,
+            is_draft=False
+        )
+        try:
+            await new_timetable.insert()
+            saved_timetables.append(new_timetable)
+        except Exception as e:
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"Save error: {str(e)}")
+    
+    # Return the first timetable (all are saved)
+    if saved_timetables:
+        return await _timetable_out(saved_timetables[0])
+    raise HTTPException(status_code=500, detail="No timetables were generated.")
 
 
 @router.post("/simulate", response_model=Any)

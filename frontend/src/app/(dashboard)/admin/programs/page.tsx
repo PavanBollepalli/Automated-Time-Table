@@ -5,19 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPrograms, createProgram, createBatch, createSemester, getCourses, getSemesters, deleteProgram, deleteBatch, deleteSemester } from "@/lib/api";
-import { Loader2, Plus, GraduationCap, BookOpen, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { getPrograms, createProgram, createBatch, createSemester, getCourses, getSemesters, deleteProgram, deleteBatch, deleteSemester, createSection, deleteSection } from "@/lib/api";
+import { Loader2, Plus, GraduationCap, BookOpen, ChevronDown, ChevronUp, Trash2, Users } from "lucide-react";
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [semesters, setSemesters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState<"program" | "batch" | "semester" | null>(null);
+  const [showForm, setShowForm] = useState<"program" | "batch" | "semester" | "section" | null>(null);
   const [form, setForm] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [selectedProgramId, setSelectedProgramId] = useState("");
+  const [selectedBatchId, setSelectedBatchId] = useState("");
   const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
 
@@ -85,6 +86,32 @@ export default function ProgramsPage() {
       load();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Failed to delete batch");
+    }
+    setDeleting(null);
+  };
+
+  const handleCreateSection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true); setError("");
+    try {
+      await createSection(selectedProgramId, selectedBatchId, {
+        name: form.name,
+        student_count: parseInt(form.student_count) || 0,
+      });
+      setShowForm(null); setForm({}); load();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to create section");
+    } finally { setSubmitting(false); }
+  };
+
+  const handleDeleteSection = async (programId: string, batchId: string, sectionId: string) => {
+    if (!confirm("Are you sure you want to delete this section?")) return;
+    setDeleting(sectionId);
+    try {
+      await deleteSection(programId, batchId, sectionId);
+      load();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete section");
     }
     setDeleting(null);
   };
@@ -163,6 +190,22 @@ export default function ProgramsPage() {
         </Card>
       )}
 
+      {showForm === "section" && (
+        <Card>
+          <CardHeader><CardTitle>Add Section to Batch</CardTitle></CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreateSection} className="grid md:grid-cols-2 gap-4">
+              <div className="space-y-2"><Label>Section Name</Label><Input placeholder="A" value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
+              <div className="space-y-2"><Label>Student Count</Label><Input type="number" placeholder="60" value={form.student_count || ""} onChange={(e) => setForm({ ...form, student_count: e.target.value })} /></div>
+              <div className="md:col-span-2 flex gap-2">
+                <Button type="submit" disabled={submitting}>{submitting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}Create Section</Button>
+                <Button type="button" variant="outline" onClick={() => setShowForm(null)}>Cancel</Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {programs.length === 0 ? (
         <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <GraduationCap className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -220,19 +263,46 @@ export default function ProgramsPage() {
                     <div><span className="text-muted-foreground">Courses:</span> <span className="font-medium">{programCourses.length}</span></div>
                   </div>
                   {p.batches?.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
                       {p.batches.map((b: any) => (
-                        <span key={b.id} className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded-full">
-                          {b.name}
-                          <button
-                            type="button"
-                            className="text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-full p-0.5 transition-colors disabled:opacity-50"
-                            onClick={() => handleDeleteBatch(pid, b.id)}
-                            disabled={deleting === b.id}
-                          >
-                            {deleting === b.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
-                          </button>
-                        </span>
+                        <div key={b.id} className="border rounded-lg p-3 bg-muted/20">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">{b.name} ({b.start_year}–{b.end_year})</span>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" onClick={() => { setSelectedProgramId(pid); setSelectedBatchId(b.id); setShowForm("section"); setForm({}); setError(""); }}>
+                                <Plus className="h-2.5 w-2.5 mr-1" /> Section
+                              </Button>
+                              <button
+                                type="button"
+                                className="text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-full p-0.5 transition-colors disabled:opacity-50"
+                                onClick={() => handleDeleteBatch(pid, b.id)}
+                                disabled={deleting === b.id}
+                              >
+                                {deleting === b.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
+                              </button>
+                            </div>
+                          </div>
+                          {b.sections?.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {b.sections.map((s: any) => (
+                                <span key={s.id} className="inline-flex items-center gap-1 text-xs bg-background border px-2 py-1 rounded-full">
+                                  <Users className="h-2.5 w-2.5 text-muted-foreground" />
+                                  Section {s.name} {s.student_count > 0 && <span className="text-muted-foreground">({s.student_count})</span>}
+                                  <button
+                                    type="button"
+                                    className="text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-full p-0.5 transition-colors disabled:opacity-50"
+                                    onClick={() => handleDeleteSection(pid, b.id, s.id)}
+                                    disabled={deleting === s.id}
+                                  >
+                                    {deleting === s.id ? <Loader2 className="h-2 w-2 animate-spin" /> : <Trash2 className="h-2 w-2" />}
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">No sections — add sections to enable per-section timetables</p>
+                          )}
+                        </div>
                       ))}
                     </div>
                   )}

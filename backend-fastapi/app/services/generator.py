@@ -4,23 +4,24 @@ from typing import List, Dict, Optional, Tuple, Set
 from app.models.courses import Course
 from app.models.faculty import Faculty
 from app.models.infrastructure import Room
-from app.models.programs import Program, Batch
+from app.models.programs import Program, Batch, Section
 
 
 class Gene:
-    __slots__ = ("course_id", "faculty_id", "room_id", "batch_id", "day", "period", "is_practical")
+    __slots__ = ("course_id", "faculty_id", "room_id", "batch_id", "section_id", "day", "period", "is_practical")
 
-    def __init__(self, course_id: str, faculty_id: str, room_id: str, batch_id: str, day: str, period: int, is_practical: bool = False):
+    def __init__(self, course_id: str, faculty_id: str, room_id: str, batch_id: str, day: str, period: int, is_practical: bool = False, section_id: str = ""):
         self.course_id = course_id
         self.faculty_id = faculty_id
         self.room_id = room_id
         self.batch_id = batch_id
+        self.section_id = section_id
         self.day = day
         self.period = period
         self.is_practical = is_practical
 
     def __repr__(self):
-        return f"{self.day} P{self.period} - {self.course_id} ({'P' if self.is_practical else 'L'}) in {self.room_id}"
+        return f"{self.day} P{self.period} - {self.course_id} ({'P' if self.is_practical else 'L'}) in {self.room_id} [sec:{self.section_id}]"
 
 
 class Chromosome:
@@ -31,11 +32,36 @@ class Chromosome:
 
 
 class TimetableGenerator:
-    def __init__(self, courses: List[Course], faculty: List[Faculty], rooms: List[Room], batches: List[Batch]):
+    def __init__(self, courses: List[Course], faculty: List[Faculty], rooms: List[Room], batches: List[Batch], sections: List[Section] | None = None):
         self.courses = courses
         self.faculty = faculty
         self.rooms = rooms
         self.batches = batches
+        # Sections are the real scheduling units; if none provided, create a virtual one per batch
+        self.sections: List[dict] = []
+        if sections:
+            for s in sections:
+                # Find which batch this section belongs to
+                parent_batch_id = ""
+                for b in batches:
+                    for link in (b.sections or []):
+                        sid = None
+                        if isinstance(link, Section):
+                            sid = str(link.id)
+                        elif hasattr(link, "ref"):
+                            sid = str(link.ref.id) if hasattr(link.ref, "id") else str(link.ref)
+                        elif hasattr(link, "id"):
+                            sid = str(link.id)
+                        if sid == str(s.id):
+                            parent_batch_id = str(b.id)
+                            break
+                    if parent_batch_id:
+                        break
+                self.sections.append({"id": str(s.id), "name": s.name, "batch_id": parent_batch_id or str(batches[0].id) if batches else ""})
+        else:
+            # Legacy: no sections, treat each batch as a single section
+            for b in batches:
+                self.sections.append({"id": str(b.id), "name": "default", "batch_id": str(b.id)})
 
         self.days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
         self.periods = list(range(1, 9))  # 8 periods per day
@@ -101,22 +127,23 @@ class TimetableGenerator:
     # ─── Smart Initialization ────────────────────────────────────
 
     def _build_session_list(self) -> List[dict]:
-        """Expand courses into individual sessions (one per period needed)."""
+        """Expand courses into individual sessions (one per period needed) per section."""
         sessions = []
-        for batch in self.batches:
-            bid = str(batch.id)
+        for sec in self.sections:
+            sec_id = sec["id"]
+            batch_id = sec["batch_id"]
             for course in self.courses:
                 cid = str(course.id)
                 comp = course.components
                 # Lectures
                 for _ in range(comp.lecture):
-                    sessions.append({"course_id": cid, "batch_id": bid, "practical": False})
+                    sessions.append({"course_id": cid, "batch_id": batch_id, "section_id": sec_id, "practical": False})
                 # Tutorials (treat as lecture-room sessions)
                 for _ in range(comp.tutorial):
-                    sessions.append({"course_id": cid, "batch_id": bid, "practical": False})
+                    sessions.append({"course_id": cid, "batch_id": batch_id, "section_id": sec_id, "practical": False})
                 # Practicals
                 for _ in range(comp.practical):
-                    sessions.append({"course_id": cid, "batch_id": bid, "practical": True})
+                    sessions.append({"course_id": cid, "batch_id": batch_id, "section_id": sec_id, "practical": True})
         return sessions
 
     def initialize_population(self) -> List[Chromosome]:
@@ -135,8 +162,10 @@ class TimetableGenerator:
 
             for sess in sessions:
                 cid = sess["course_id"]
-                bid = sess["batch_id"]
+                bid = sess["section_id"]  # Use section_id as scheduling unit
                 is_prac = sess["practical"]
+                batch_id = sess["batch_id"]
+                section_id = sess["section_id"]
 
                 capable = self._get_faculty_for_course(cid)
                 random.shuffle(capable)
@@ -174,7 +203,7 @@ class TimetableGenerator:
                         faculty_booked.setdefault(fid, set()).add(slot)
                         room_booked.setdefault(rid, set()).add(slot)
 
-                        genes.append(Gene(cid, fid, rid, bid, slot[0], slot[1], is_prac))
+                        genes.append(Gene(cid, fid, rid, batch_id, slot[0], slot[1], is_prac, section_id))
                         placed = True
                         break  # found a valid slot for this faculty
 
@@ -187,7 +216,7 @@ class TimetableGenerator:
                     fid = str(fac.id)
                     slot = random.choice(self.all_slots)
                     room = self._pick_room(is_prac)
-                    genes.append(Gene(cid, fid, str(room.id), bid, slot[0], slot[1], is_prac))
+                    genes.append(Gene(cid, fid, str(room.id), batch_id, slot[0], slot[1], is_prac, section_id))
 
             population.append(Chromosome(genes))
         return population
@@ -200,9 +229,9 @@ class TimetableGenerator:
 
         faculty_at: Dict[Tuple[str, int], Set[str]] = {}
         room_at: Dict[Tuple[str, int], Set[str]] = {}
-        batch_at: Dict[Tuple[str, int], Set[str]] = {}
+        batch_at: Dict[Tuple[str, int], Set[str]] = {}  # keyed by section_id
         batch_schedule: Dict[str, Dict[str, List[int]]] = {
-            str(b.id): {d: [] for d in self.days} for b in self.batches
+            sec["id"]: {d: [] for d in self.days} for sec in self.sections
         }
 
         for gene in chromosome.genes:
@@ -229,13 +258,14 @@ class TimetableGenerator:
             else:
                 rset.add(gene.room_id)
 
-            # ── Hard: Batch clash ──
+            # ── Hard: Section clash (a section can only be in one place at a time) ──
+            section_key = gene.section_id or gene.batch_id
             bset = batch_at.setdefault(slot, set())
-            if gene.batch_id in bset:
+            if section_key in bset:
                 score -= 100
-                conflicts.append(f"Hard: Batch {gene.batch_id} clashing at {slot}")
+                conflicts.append(f"Hard: Section {section_key} clashing at {slot}")
             else:
-                bset.add(gene.batch_id)
+                bset.add(section_key)
 
             # ── Soft: Room-type mismatch ──
             if gene.is_practical:
@@ -247,8 +277,8 @@ class TimetableGenerator:
                     conflicts.append(f"Soft: Practical {cname} in non-lab room {room.name}")
 
             # Track for gap analysis
-            if gene.batch_id in batch_schedule:
-                batch_schedule[gene.batch_id][gene.day].append(gene.period)
+            if section_key in batch_schedule:
+                batch_schedule[section_key][gene.day].append(gene.period)
 
         # ── Soft: Gap & consecutive analysis ──
         for bid, schedule in batch_schedule.items():
@@ -341,13 +371,13 @@ class TimetableGenerator:
         for i in range(min_len):
             src = p1.genes[i] if random.random() < 0.5 else p2.genes[i]
             child_genes.append(Gene(src.course_id, src.faculty_id, src.room_id,
-                                    src.batch_id, src.day, src.period, src.is_practical))
+                                    src.batch_id, src.day, src.period, src.is_practical, src.section_id))
         # Append remaining genes from the longer parent
         longer = p1.genes if len(p1.genes) >= len(p2.genes) else p2.genes
         for i in range(min_len, len(longer)):
             g = longer[i]
             child_genes.append(Gene(g.course_id, g.faculty_id, g.room_id,
-                                    g.batch_id, g.day, g.period, g.is_practical))
+                                    g.batch_id, g.day, g.period, g.is_practical, g.section_id))
         return Chromosome(child_genes)
 
     # ─── Tournament Selection ────────────────────────────────────
@@ -374,7 +404,7 @@ class TimetableGenerator:
             # Track overall best
             if best_ever is None or current_best.fitness > best_ever.fitness:
                 best_ever = Chromosome(
-                    [Gene(g.course_id, g.faculty_id, g.room_id, g.batch_id, g.day, g.period, g.is_practical)
+                    [Gene(g.course_id, g.faculty_id, g.room_id, g.batch_id, g.day, g.period, g.is_practical, g.section_id)
                      for g in current_best.genes]
                 )
                 best_ever.fitness = current_best.fitness
@@ -397,7 +427,7 @@ class TimetableGenerator:
             # Build next generation
             next_gen = [
                 Chromosome(
-                    [Gene(g.course_id, g.faculty_id, g.room_id, g.batch_id, g.day, g.period, g.is_practical)
+                    [Gene(g.course_id, g.faculty_id, g.room_id, g.batch_id, g.day, g.period, g.is_practical, g.section_id)
                      for g in population[i].genes]
                 )
                 for i in range(self.elite_size)

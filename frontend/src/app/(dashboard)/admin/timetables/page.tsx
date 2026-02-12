@@ -82,6 +82,7 @@ export default function TimetablesPage() {
               <div><span className="text-muted-foreground">Program:</span> <span className="font-medium">{selectedTT.program_name || "—"}</span></div>
               <div><span className="text-muted-foreground">Batch:</span> <span className="font-medium">{selectedTT.batch_name || "—"}</span></div>
               <div><span className="text-muted-foreground">Semester:</span> <span className="font-medium">{selectedTT.semester_name || "—"}</span></div>
+              {selectedTT.section_name && <div><span className="text-muted-foreground">Section:</span> <span className="font-medium">{selectedTT.section_name}</span></div>}
               <div><span className="text-muted-foreground">Entries:</span> <span className="font-medium">{selectedTT.entries?.length || 0}</span></div>
               {selectedTT.is_draft && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">Draft</span>}
             </div>
@@ -119,7 +120,7 @@ export default function TimetablesPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-semibold">Program: {t.program_name || "—"}</h3>
-                    <p className="text-sm text-muted-foreground">Batch: {t.batch_name || "—"}</p>
+                    <p className="text-sm text-muted-foreground">Batch: {t.batch_name || "—"}{t.section_name ? ` · Section ${t.section_name}` : ""}</p>
                     <p className="text-sm text-muted-foreground">Semester: {t.semester_name || "—"}</p>
                   </div>
                   {t.is_draft && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">Draft</span>}

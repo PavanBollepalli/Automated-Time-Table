@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getPrograms, getSemesters, generateTimetable } from "@/lib/api";
-import { Loader2, Zap, CheckCircle2 } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, Users } from "lucide-react";
 
 export default function DeoGeneratePage() {
   const [programs, setPrograms] = useState<any[]>([]);
@@ -17,6 +17,7 @@ export default function DeoGeneratePage() {
   const [programId, setProgramId] = useState("");
   const [batchId, setBatchId] = useState("");
   const [semesterId, setSemesterId] = useState("");
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
   useEffect(() => {
     Promise.all([getPrograms(), getSemesters()])
@@ -27,10 +28,23 @@ export default function DeoGeneratePage() {
 
   const selectedProgram = programs.find((p: any) => (p.id || p._id) === programId);
   const batches: any[] = selectedProgram?.batches || [];
+  const selectedBatch = batches.find((b: any) => (b.id || b._id) === batchId);
+  const sections: any[] = selectedBatch?.sections || [];
+
+  const toggleSection = (id: string) => {
+    setSelectedSectionIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault(); setGenerating(true); setError(""); setSuccess("");
-    try { await generateTimetable(programId, batchId, semesterId); setSuccess("Timetable generated successfully!"); }
+    try {
+      const sectionIds = selectedSectionIds.length > 0 ? selectedSectionIds : undefined;
+      await generateTimetable(programId, batchId, semesterId, sectionIds);
+      const sectionCount = sectionIds?.length || sections.length || 1;
+      setSuccess(sectionCount > 1 ? `${sectionCount} section timetables generated successfully!` : "Timetable generated successfully!");
+    }
     catch (err: any) { const d = err?.response?.data?.detail; setError(typeof d === "string" ? d : JSON.stringify(d) || "Generation failed."); }
     finally { setGenerating(false); }
   };
@@ -45,13 +59,29 @@ export default function DeoGeneratePage() {
       <Card><CardHeader><CardTitle>Generation Parameters</CardTitle></CardHeader><CardContent>
         <form onSubmit={handleGenerate} className="space-y-4 max-w-md">
           <div className="space-y-2"><Label>Program</Label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={programId} onChange={e=>{setProgramId(e.target.value);setBatchId("")}} required>
+            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={programId} onChange={e=>{setProgramId(e.target.value);setBatchId("");setSelectedSectionIds([])}} required>
               <option value="">Select program</option>{programs.map((p:any)=><option key={p.id||p._id} value={p.id||p._id}>{p.name} ({p.code})</option>)}
             </select></div>
           <div className="space-y-2"><Label>Batch</Label>
-            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={batchId} onChange={e=>setBatchId(e.target.value)} required disabled={!programId}>
+            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={batchId} onChange={e=>{setBatchId(e.target.value);setSelectedSectionIds([])}} required disabled={!programId}>
               <option value="">{programId?"Select batch":"Select a program first"}</option>{batches.map((b:any)=><option key={b.id||b._id} value={b.id||b._id}>{b.name} ({b.start_year}–{b.end_year})</option>)}
             </select></div>
+
+          {batchId && sections.length > 0 && (
+            <div className="space-y-2">
+              <Label>Sections <span className="text-muted-foreground text-xs font-normal">(select specific or leave empty for all)</span></Label>
+              <div className="flex flex-wrap gap-2 p-3 border rounded-md">
+                {sections.map((s: any) => (
+                  <button type="button" key={s.id} onClick={() => toggleSection(s.id)}
+                    className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${selectedSectionIds.includes(s.id) ? "bg-primary text-white border-primary" : "bg-muted/40 hover:bg-muted"}`}>
+                    <Users className="h-3 w-3" /> Section {s.name} {s.student_count > 0 && <span className="opacity-70">({s.student_count})</span>}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">{selectedSectionIds.length === 0 ? `All ${sections.length} sections will be scheduled together` : `${selectedSectionIds.length} section(s) selected`}</p>
+            </div>
+          )}
+
           <div className="space-y-2"><Label>Semester</Label>
             <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={semesterId} onChange={e=>setSemesterId(e.target.value)} required>
               <option value="">Select semester</option>{semesters.map((s:any)=><option key={s.id||s._id} value={s.id||s._id}>{s.name} (Sem {s.number})</option>)}

@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { getPrograms, getSemesters, generateTimetable } from "@/lib/api";
-import { Loader2, Zap, CheckCircle2 } from "lucide-react";
+import { Loader2, Zap, CheckCircle2, Users } from "lucide-react";
 
 export default function GeneratePage() {
   const [programs, setPrograms] = useState<any[]>([]);
@@ -17,6 +17,7 @@ export default function GeneratePage() {
   const [programId, setProgramId] = useState("");
   const [batchId, setBatchId] = useState("");
   const [semesterId, setSemesterId] = useState("");
+  const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
 
   useEffect(() => {
     Promise.all([getPrograms(), getSemesters()])
@@ -27,13 +28,27 @@ export default function GeneratePage() {
 
   const selectedProgram = programs.find((p: any) => (p.id || p._id) === programId);
   const batches: any[] = selectedProgram?.batches || [];
+  const selectedBatch = batches.find((b: any) => (b.id || b._id) === batchId);
+  const sections: any[] = selectedBatch?.sections || [];
+
+  const toggleSection = (id: string) => {
+    setSelectedSectionIds((prev) =>
+      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
+    );
+  };
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setGenerating(true); setError(""); setSuccess("");
     try {
-      const result = await generateTimetable(programId, batchId, semesterId);
-      setSuccess("Timetable generated successfully! You can view it in the Timetables section.");
+      const sectionIds = selectedSectionIds.length > 0 ? selectedSectionIds : undefined;
+      const result = await generateTimetable(programId, batchId, semesterId, sectionIds);
+      const sectionCount = sectionIds?.length || sections.length || 1;
+      setSuccess(
+        sectionCount > 1
+          ? `${sectionCount} section timetables generated successfully! View them in the Timetables section.`
+          : "Timetable generated successfully! You can view it in the Timetables section."
+      );
     } catch (err: any) {
       const detail = err?.response?.data?.detail;
       setError(typeof detail === "string" ? detail : JSON.stringify(detail) || "Generation failed. Make sure courses, faculty, and rooms are configured.");
@@ -71,11 +86,46 @@ export default function GeneratePage() {
 
             <div className="space-y-2">
               <Label>Batch</Label>
-              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={batchId} onChange={(e) => setBatchId(e.target.value)} required disabled={!programId}>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={batchId} onChange={(e) => { setBatchId(e.target.value); setSelectedSectionIds([]); }} required disabled={!programId}>
                 <option value="">{programId ? "Select batch" : "Select a program first"}</option>
                 {batches.map((b: any) => <option key={b.id || b._id} value={b.id || b._id}>{b.name} ({b.start_year}–{b.end_year})</option>)}
               </select>
             </div>
+
+            {batchId && sections.length > 0 && (
+              <div className="space-y-2">
+                <Label>Sections <span className="text-muted-foreground text-xs font-normal">(select specific sections or leave empty for all)</span></Label>
+                <div className="flex flex-wrap gap-2 p-3 border rounded-md">
+                  {sections.map((s: any) => (
+                    <button
+                      type="button"
+                      key={s.id}
+                      onClick={() => toggleSection(s.id)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${
+                        selectedSectionIds.includes(s.id)
+                          ? "bg-primary text-white border-primary"
+                          : "bg-muted/40 hover:bg-muted"
+                      }`}
+                    >
+                      <Users className="h-3 w-3" />
+                      Section {s.name}
+                      {s.student_count > 0 && <span className="opacity-70">({s.student_count})</span>}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {selectedSectionIds.length === 0
+                    ? `All ${sections.length} sections will be scheduled together`
+                    : `${selectedSectionIds.length} section(s) selected`}
+                </p>
+              </div>
+            )}
+
+            {batchId && sections.length === 0 && (
+              <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
+                No sections found for this batch. A single timetable will be generated for the entire batch. Add sections in the Programs page for per-section scheduling.
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Semester</Label>

@@ -20,6 +20,7 @@ class TimetableGenerateRequest(BaseModel):
     program_id: PydanticObjectId
     batch_id: PydanticObjectId
     semester_id: PydanticObjectId
+    section_ids: Optional[List[str]] = None  # If None, generate for all sections in the batch
 
 class TimetableEntryOut(BaseModel):
     entry_id: Optional[str] = None
@@ -32,15 +33,19 @@ class TimetableEntryOut(BaseModel):
     room_id: str
     room_name: str
     batch_id: str
+    section_id: str = ""
+    section_name: str = ""
 
 class TimetableOut(BaseModel):
     id: str
     program_id: str
     batch_id: str
     semester_id: str
+    section_id: str = ""
     program_name: str = ""
     batch_name: str = ""
     semester_name: str = ""
+    section_name: str = ""
     entries: List[TimetableEntryOut] = []
     is_draft: bool = True
 
