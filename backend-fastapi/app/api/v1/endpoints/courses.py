@@ -77,3 +77,15 @@ async def read_course(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return _course_out(course)
+
+
+@router.delete("/{course_id}")
+async def delete_course(
+    course_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    course = await Course.get(course_id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    await course.delete()
+    return {"detail": "Course deleted"}

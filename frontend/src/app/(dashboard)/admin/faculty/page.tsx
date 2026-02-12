@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getFaculty, createFaculty, getCourses } from "@/lib/api";
-import { Loader2, Plus, Users } from "lucide-react";
+import { getFaculty, createFaculty, getCourses, deleteFaculty } from "@/lib/api";
+import { Loader2, Plus, Users, Trash2 } from "lucide-react";
 
 export default function FacultyPage() {
   const [faculty, setFaculty] = useState<any[]>([]);
@@ -17,6 +17,7 @@ export default function FacultyPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState<any>({ can_teach_course_ids: [], busy_slots: [] });
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -49,6 +50,18 @@ export default function FacultyPage() {
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Failed to add faculty");
     } finally { setSubmitting(false); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this faculty member?")) return;
+    setDeleting(id);
+    try {
+      await deleteFaculty(id);
+      setFaculty((prev) => prev.filter((f) => f.id !== id));
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete faculty");
+    }
+    setDeleting(null);
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -120,7 +133,12 @@ export default function FacultyPage() {
                     <h3 className="font-semibold text-lg">{f.name}</h3>
                     <p className="text-muted-foreground text-sm">{f.email}</p>
                   </div>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{f.designation}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{f.designation}</span>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDelete(f.id)} disabled={deleting === f.id}>
+                      {deleting === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
                   <div><span className="text-muted-foreground">Dept:</span> {f.department}</div>

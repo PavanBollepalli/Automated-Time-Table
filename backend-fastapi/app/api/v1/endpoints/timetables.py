@@ -306,3 +306,18 @@ async def update_timetable_entry(
         return await _timetable_out(timetable)
 
     raise HTTPException(status_code=400, detail="Invalid action.")
+
+
+@router.delete("/{id}")
+async def delete_timetable(
+    id: PydanticObjectId,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """
+    Delete a timetable by its ID.
+    """
+    timetable = await Timetable.get(id)
+    if not timetable:
+        raise HTTPException(status_code=404, detail="Timetable not found.")
+    await timetable.delete()
+    return {"detail": "Timetable deleted successfully.", "id": str(id)}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/Sidebar";
+import { AIChatbot } from "@/components/AIChatbot";
 import { useAuth } from "@/context/AuthContext";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
@@ -34,6 +35,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </main>
       </div>
+      <AIChatbot />
     </div>
   );
 }

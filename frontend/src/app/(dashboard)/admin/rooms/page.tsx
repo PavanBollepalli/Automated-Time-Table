@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getRooms, createRoom } from "@/lib/api";
-import { Loader2, Plus, Building } from "lucide-react";
+import { getRooms, createRoom, deleteRoom } from "@/lib/api";
+import { Loader2, Plus, Building, Trash2 } from "lucide-react";
 
 export default function RoomsPage() {
   const [rooms, setRooms] = useState<any[]>([]);
@@ -17,6 +17,7 @@ export default function RoomsPage() {
   const [form, setForm] = useState<any>({});
   const [featureInput, setFeatureInput] = useState("");
   const [features, setFeatures] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -24,6 +25,18 @@ export default function RoomsPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this room?")) return;
+    setDeleting(id);
+    try {
+      await deleteRoom(id);
+      setRooms((prev) => prev.filter((r) => (r.id || r._id) !== id));
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete room");
+    }
+    setDeleting(null);
+  };
 
   const addFeature = () => {
     if (featureInput.trim() && !features.includes(featureInput.trim())) {
@@ -112,7 +125,12 @@ export default function RoomsPage() {
               <CardContent className="pt-6">
                 <div className="flex items-start justify-between">
                   <h3 className="font-semibold text-lg">{r.name}</h3>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{r.type}</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{r.type}</span>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDelete(r.id || r._id)} disabled={deleting === (r.id || r._id)}>
+                      {deleting === (r.id || r._id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                    </Button>
+                  </div>
                 </div>
                 <div className="mt-3 text-sm text-muted-foreground">Capacity: <span className="text-foreground font-medium">{r.capacity} seats</span></div>
                 {r.features?.length > 0 && (

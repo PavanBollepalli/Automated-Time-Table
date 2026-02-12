@@ -74,6 +74,21 @@ export const createSemester = async (semester: { name: string; number: number })
   return data;
 };
 
+export const deleteProgram = async (id: string) => {
+  const { data } = await apiClient.delete(`/programs/${id}`);
+  return data;
+};
+
+export const deleteBatch = async (programId: string, batchId: string) => {
+  const { data } = await apiClient.delete(`/programs/${programId}/batches/${batchId}`);
+  return data;
+};
+
+export const deleteSemester = async (id: string) => {
+  const { data } = await apiClient.delete(`/programs/semesters/${id}`);
+  return data;
+};
+
 // ─── Courses ───
 export const getCourses = async () => {
   const { data } = await apiClient.get("/courses/");
@@ -86,6 +101,11 @@ export const createCourse = async (course: {
   program_id?: string; semester_id?: string; is_elective?: boolean;
 }) => {
   const { data } = await apiClient.post("/courses/", course);
+  return data;
+};
+
+export const deleteCourse = async (id: string) => {
+  const { data } = await apiClient.delete(`/courses/${id}`);
   return data;
 };
 
@@ -104,6 +124,11 @@ export const createFaculty = async (faculty: {
   return data;
 };
 
+export const deleteFaculty = async (id: string) => {
+  const { data } = await apiClient.delete(`/faculty/${id}`);
+  return data;
+};
+
 export const getMyTimetable = async () => {
   const { data } = await apiClient.get("/faculty/me/timetable");
   return data;
@@ -117,6 +142,11 @@ export const getRooms = async () => {
 
 export const createRoom = async (room: { name: string; capacity: number; type?: string; features?: string[] }) => {
   const { data } = await apiClient.post("/infrastructure/", room);
+  return data;
+};
+
+export const deleteRoom = async (id: string) => {
+  const { data } = await apiClient.delete(`/infrastructure/${id}`);
   return data;
 };
 
@@ -148,6 +178,30 @@ export const updateTimetableEntry = async (
     action: "move_entry",
     payload,
   });
+  return data;
+};
+
+export const deleteTimetable = async (id: string) => {
+  const { data } = await apiClient.delete(`/timetables/${id}`);
+  return data;
+};
+
+// ─── AI ───
+export const aiChat = async (message: string, timetableId?: string) => {
+  const { data } = await apiClient.post("/ai/chat", {
+    message,
+    timetable_id: timetableId || undefined,
+  });
+  return data;
+};
+
+export const aiAnalyze = async (timetableId: string) => {
+  const { data } = await apiClient.post("/ai/analyze", { timetable_id: timetableId });
+  return data;
+};
+
+export const aiInsights = async () => {
+  const { data } = await apiClient.get("/ai/insights");
   return data;
 };
 

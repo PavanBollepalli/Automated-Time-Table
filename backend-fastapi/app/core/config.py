@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     MONGODB_URI: str
     MONGODB_DB: str = "timetable_db"
+    GROQ_API_KEY: str = ""
     
     BACKEND_CORS_ORIGINS: List[str] = []
 

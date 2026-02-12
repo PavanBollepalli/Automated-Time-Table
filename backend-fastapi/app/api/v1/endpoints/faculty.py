@@ -1,5 +1,6 @@
 from typing import List, Any
 from fastapi import APIRouter, Depends, HTTPException
+from beanie.odm.fields import PydanticObjectId
 from app.api import deps
 from app.models.faculty import Faculty
 from app.models.users import User
@@ -72,3 +73,18 @@ async def get_my_timetable(
                 my_schedule.append(entry)
     
     return my_schedule
+
+
+@router.delete("/{id}")
+async def delete_faculty(
+    id: PydanticObjectId,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """
+    Delete a faculty member by ID.
+    """
+    faculty = await Faculty.get(id)
+    if not faculty:
+        raise HTTPException(status_code=404, detail="Faculty not found.")
+    await faculty.delete()
+    return {"detail": "Faculty deleted successfully.", "id": str(id)}

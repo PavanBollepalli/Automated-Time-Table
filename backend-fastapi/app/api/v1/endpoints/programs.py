@@ -109,3 +109,67 @@ async def create_semester(
     semester = Semester(**semester_in.model_dump())
     await semester.insert()
     return _semester_out(semester)
+
+
+# Delete endpoints
+@router.delete("/{program_id}")
+async def delete_program(
+    program_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    program = await Program.get(program_id)
+    if not program:
+        raise HTTPException(status_code=404, detail="Program not found")
+    # Delete associated batches
+    for link in (program.batches or []):
+        batch_id = None
+        if isinstance(link, Batch):
+            batch_id = link.id
+        elif hasattr(link, "ref"):
+            batch_id = link.ref.id if hasattr(link.ref, "id") else link.ref
+        elif hasattr(link, "id"):
+            batch_id = link.id
+        if batch_id:
+            batch = await Batch.get(batch_id)
+            if batch:
+                await batch.delete()
+    await program.delete()
+    return {"detail": "Program deleted"}
+
+
+@router.delete("/{program_id}/batches/{batch_id}")
+async def delete_batch(
+    program_id: str,
+    batch_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    program = await Program.get(program_id)
+    if not program:
+        raise HTTPException(status_code=404, detail="Program not found")
+    batch = await Batch.get(batch_id)
+    if not batch:
+        raise HTTPException(status_code=404, detail="Batch not found")
+    # Remove from program's batch list
+    program.batches = [
+        b for b in (program.batches or [])
+        if not (
+            (isinstance(b, Batch) and str(b.id) == batch_id)
+            or (hasattr(b, "ref") and str(getattr(b.ref, "id", b.ref)) == batch_id)
+            or (hasattr(b, "id") and str(b.id) == batch_id)
+        )
+    ]
+    await program.save()
+    await batch.delete()
+    return {"detail": "Batch deleted"}
+
+
+@router.delete("/semesters/{semester_id}")
+async def delete_semester(
+    semester_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    semester = await Semester.get(semester_id)
+    if not semester:
+        raise HTTPException(status_code=404, detail="Semester not found")
+    await semester.delete()
+    return {"detail": "Semester deleted"}

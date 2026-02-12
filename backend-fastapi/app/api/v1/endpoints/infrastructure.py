@@ -36,3 +36,15 @@ async def read_rooms(
 ) -> Any:
     rooms = await Room.find_all().skip(skip).limit(limit).to_list()
     return [_room_out(r) for r in rooms]
+
+
+@router.delete("/{room_id}")
+async def delete_room(
+    room_id: str,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    room = await Room.get(room_id)
+    if not room:
+        raise HTTPException(status_code=404, detail="Room not found")
+    await room.delete()
+    return {"detail": "Room deleted"}

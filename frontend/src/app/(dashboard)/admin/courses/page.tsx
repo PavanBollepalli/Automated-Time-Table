@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getCourses, createCourse, getPrograms, getSemesters } from "@/lib/api";
-import { Loader2, Plus, BookOpen } from "lucide-react";
+import { getCourses, createCourse, getPrograms, getSemesters, deleteCourse } from "@/lib/api";
+import { Loader2, Plus, BookOpen, Trash2 } from "lucide-react";
 
 export default function CoursesPage() {
   const [courses, setCourses] = useState<any[]>([]);
@@ -17,6 +17,7 @@ export default function CoursesPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState<any>({ components: { lecture: 3, tutorial: 1, practical: 0 } });
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -47,6 +48,18 @@ export default function CoursesPage() {
   // Helper to get program/semester names for display
   const getProgramName = (id: string | null) => { if (!id) return "—"; const p = programs.find((p: any) => (p.id || p._id) === id); return p ? `${p.name} (${p.code})` : id; };
   const getSemesterName = (id: string | null) => { if (!id) return "—"; const s = semesters.find((s: any) => (s.id || s._id) === id); return s ? s.name : id; };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this course?")) return;
+    setDeleting(id);
+    try {
+      await deleteCourse(id);
+      setCourses((prev) => prev.filter((c) => (c.id || c._id) !== id));
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete course");
+    }
+    setDeleting(null);
+  };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
 
@@ -125,6 +138,7 @@ export default function CoursesPage() {
               <th className="text-left py-3 px-4 font-medium text-muted-foreground">Type</th>
               <th className="text-left py-3 px-4 font-medium text-muted-foreground">L-T-P</th>
               <th className="text-left py-3 px-4 font-medium text-muted-foreground">Elective</th>
+              <th className="text-left py-3 px-4 font-medium text-muted-foreground">Actions</th>
             </tr></thead>
             <tbody>
               {courses.map((c: any) => (
@@ -137,6 +151,11 @@ export default function CoursesPage() {
                   <td className="py-3 px-4"><span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{c.type}</span></td>
                   <td className="py-3 px-4 font-mono">{c.components?.lecture || 0}-{c.components?.tutorial || 0}-{c.components?.practical || 0}</td>
                   <td className="py-3 px-4">{c.is_elective ? "Yes" : "No"}</td>
+                  <td className="py-3 px-4">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDelete(c.id || c._id)} disabled={deleting === (c.id || c._id)}>
+                      {deleting === (c.id || c._id) ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>

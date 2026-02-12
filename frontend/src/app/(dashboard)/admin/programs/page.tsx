@@ -5,21 +5,28 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getPrograms, createProgram, createBatch, createSemester } from "@/lib/api";
-import { Loader2, Plus, GraduationCap } from "lucide-react";
+import { getPrograms, createProgram, createBatch, createSemester, getCourses, getSemesters, deleteProgram, deleteBatch, deleteSemester } from "@/lib/api";
+import { Loader2, Plus, GraduationCap, BookOpen, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [semesters, setSemesters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState<"program" | "batch" | "semester" | null>(null);
   const [form, setForm] = useState<any>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [selectedProgramId, setSelectedProgramId] = useState("");
+  const [expandedProgram, setExpandedProgram] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
-    getPrograms().then(setPrograms).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([getPrograms(), getCourses(), getSemesters()])
+      .then(([p, c, s]) => { setPrograms(p); setCourses(c); setSemesters(s); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   };
 
   useEffect(() => { load(); }, []);
@@ -51,10 +58,35 @@ export default function ProgramsPage() {
     setSubmitting(true); setError("");
     try {
       await createSemester({ name: form.name, number: parseInt(form.number) });
-      setShowForm(null); setForm({});
+      setShowForm(null); setForm({}); load();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Failed to create semester");
     } finally { setSubmitting(false); }
+  };
+
+  const handleDeleteProgram = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this program and all its batches?")) return;
+    setDeleting(id);
+    try {
+      await deleteProgram(id);
+      setPrograms((prev) => prev.filter((p) => (p.id || p._id) !== id));
+      if (expandedProgram === id) setExpandedProgram(null);
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete program");
+    }
+    setDeleting(null);
+  };
+
+  const handleDeleteBatch = async (programId: string, batchId: string) => {
+    if (!confirm("Are you sure you want to delete this batch?")) return;
+    setDeleting(batchId);
+    try {
+      await deleteBatch(programId, batchId);
+      load();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to delete batch");
+    }
+    setDeleting(null);
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -138,31 +170,150 @@ export default function ProgramsPage() {
           <p className="text-muted-foreground text-sm mt-1">Create your first program to get started</p>
         </CardContent></Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {programs.map((p: any) => (
-            <Card key={p.id} className="border-border/60 hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{p.name}</CardTitle>
-                  <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full">{p.type}</span>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Code</span><span className="font-medium">{p.code}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Duration</span><span className="font-medium">{p.duration_years} years</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Batches</span><span className="font-medium">{p.batches?.length || 0}</span>
-                </div>
-                <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => { setSelectedProgramId(p.id); setShowForm("batch"); setForm({}); setError(""); }}>
-                  <Plus className="h-3 w-3 mr-1" /> Add Batch
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid gap-4">
+          {programs.map((p: any) => {
+            const pid = p.id || p._id;
+            const isExpanded = expandedProgram === pid;
+            // Get courses belonging to this program
+            const programCourses = courses.filter((c: any) => c.program_id === pid);
+            // Group by semester
+            const semCourseMap: Record<string, any[]> = {};
+            const unassigned: any[] = [];
+            for (const c of programCourses) {
+              if (c.semester_id) {
+                if (!semCourseMap[c.semester_id]) semCourseMap[c.semester_id] = [];
+                semCourseMap[c.semester_id].push(c);
+              } else {
+                unassigned.push(c);
+              }
+            }
+            // Sort semesters by number
+            const sortedSemIds = Object.keys(semCourseMap).sort((a, b) => {
+              const sa = semesters.find((s: any) => (s.id || s._id) === a);
+              const sb = semesters.find((s: any) => (s.id || s._id) === b);
+              return (sa?.number || 0) - (sb?.number || 0);
+            });
+            const getSemName = (sid: string) => {
+              const s = semesters.find((s: any) => (s.id || s._id) === sid);
+              return s ? `${s.name} (Sem ${s.number})` : sid;
+            };
+
+            return (
+              <Card key={pid} className="border-border/60 hover:shadow-md transition-shadow">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-lg">{p.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground mt-0.5">{p.code} &middot; {p.type} &middot; {p.duration_years} years</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs font-medium bg-primary/10 text-primary px-2 py-1 rounded-full">{p.type}</span>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDeleteProgram(pid)} disabled={deleting === pid}>
+                        {deleting === pid ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-4 text-sm">
+                    <div><span className="text-muted-foreground">Batches:</span> <span className="font-medium">{p.batches?.length || 0}</span></div>
+                    <div><span className="text-muted-foreground">Courses:</span> <span className="font-medium">{programCourses.length}</span></div>
+                  </div>
+                  {p.batches?.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {p.batches.map((b: any) => (
+                        <span key={b.id} className="inline-flex items-center gap-1 text-xs bg-muted px-2 py-1 rounded-full">
+                          {b.name}
+                          <button
+                            type="button"
+                            className="text-destructive hover:text-destructive-foreground hover:bg-destructive rounded-full p-0.5 transition-colors disabled:opacity-50"
+                            onClick={() => handleDeleteBatch(pid, b.id)}
+                            disabled={deleting === b.id}
+                          >
+                            {deleting === b.id ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => { setSelectedProgramId(pid); setShowForm("batch"); setForm({}); setError(""); }}>
+                      <Plus className="h-3 w-3 mr-1" /> Add Batch
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setExpandedProgram(isExpanded ? null : pid)}>
+                      <BookOpen className="h-3 w-3 mr-1" />
+                      Curriculum
+                      {isExpanded ? <ChevronUp className="h-3 w-3 ml-1" /> : <ChevronDown className="h-3 w-3 ml-1" />}
+                    </Button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="mt-4 border-t pt-4 space-y-4">
+                      <h4 className="font-semibold text-sm flex items-center gap-1"><BookOpen className="h-4 w-4" /> Semester-wise Curriculum</h4>
+                      {programCourses.length === 0 ? (
+                        <p className="text-sm text-muted-foreground py-4 text-center">No courses linked to this program yet. Go to Courses page to add courses with this program and semester.</p>
+                      ) : (
+                        <>
+                          {sortedSemIds.map((sid) => (
+                            <div key={sid} className="space-y-2">
+                              <h5 className="text-sm font-medium text-primary bg-primary/5 px-3 py-1.5 rounded-md">{getSemName(sid)} &mdash; {semCourseMap[sid].length} course(s), {semCourseMap[sid].reduce((sum: number, c: any) => sum + (c.credits || 0), 0)} credits</h5>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead><tr className="border-b bg-muted/40">
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Code</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Name</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Credits</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Type</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">L-T-P</th>
+                                  </tr></thead>
+                                  <tbody>
+                                    {semCourseMap[sid].map((c: any) => (
+                                      <tr key={c.id || c._id} className="border-b hover:bg-muted/20">
+                                        <td className="py-2 px-3 font-mono font-medium">{c.code}</td>
+                                        <td className="py-2 px-3">{c.name}</td>
+                                        <td className="py-2 px-3">{c.credits}</td>
+                                        <td className="py-2 px-3"><span className="bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{c.type}</span></td>
+                                        <td className="py-2 px-3 font-mono">{c.components?.lecture || 0}-{c.components?.tutorial || 0}-{c.components?.practical || 0}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                          {unassigned.length > 0 && (
+                            <div className="space-y-2">
+                              <h5 className="text-sm font-medium text-orange-600 bg-orange-50 px-3 py-1.5 rounded-md">No Semester Assigned &mdash; {unassigned.length} course(s)</h5>
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                  <thead><tr className="border-b bg-muted/40">
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Code</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Name</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Credits</th>
+                                    <th className="text-left py-2 px-3 font-medium text-muted-foreground">Type</th>
+                                  </tr></thead>
+                                  <tbody>
+                                    {unassigned.map((c: any) => (
+                                      <tr key={c.id || c._id} className="border-b hover:bg-muted/20">
+                                        <td className="py-2 px-3 font-mono">{c.code}</td>
+                                        <td className="py-2 px-3">{c.name}</td>
+                                        <td className="py-2 px-3">{c.credits}</td>
+                                        <td className="py-2 px-3"><span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">{c.type}</span></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>
