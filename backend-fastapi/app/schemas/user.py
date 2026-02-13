@@ -39,3 +39,11 @@ class UserOut(BaseModel):
     full_name: Optional[str] = None
     role: str
     is_active: bool
+
+
+class BulkUserUploadResponse(BaseModel):
+    total_records: int
+    successfully_created: int
+    failed: int
+    errors: list = []
+    created_users: list = []

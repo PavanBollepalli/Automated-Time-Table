@@ -222,4 +222,24 @@ export const aiInsights = async () => {
   return data;
 };
 
+// ─── User Management ───
+export const bulkUploadUsers = async (file: File) => {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await apiClient.post("/user-management/create-users", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+};
+
+export const getAllUsers = async () => {
+  const { data } = await apiClient.get("/user-management/users");
+  return data;
+};
+
+export const deleteUser = async (userId: string) => {
+  const { data } = await apiClient.delete(`/user-management/users/${userId}`);
+  return data;
+};
+
 export default apiClient;
