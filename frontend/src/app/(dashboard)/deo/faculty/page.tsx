@@ -17,6 +17,7 @@ export default function DeoFacultyPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState<any>({});
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
 
   const load = () => { setLoading(true); Promise.all([getFaculty(), getCourses()]).then(([f, c]) => { setFaculty(f); setCourses(c); }).catch(() => {}).finally(() => setLoading(false)); };
   useEffect(() => { load(); }, []);
@@ -26,7 +27,10 @@ export default function DeoFacultyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault(); setSubmitting(true); setError("");
     try {
-      await createFaculty({ name: form.name, email: form.email, department: form.department, designation: form.designation, max_load_hours: parseInt(form.max_load_hours) || 18, can_teach_course_ids: selectedCourses, busy_slots: [] });
+      const result = await createFaculty({ name: form.name, email: form.email, department: form.department, designation: form.designation, max_load_hours: parseInt(form.max_load_hours) || 18, can_teach_course_ids: selectedCourses, busy_slots: [] });
+      if (result?.default_password) {
+        setCreatedPassword(result.default_password);
+      }
       setShowForm(false); setForm({}); setSelectedCourses([]); load();
     } catch (err: any) { setError(err?.response?.data?.detail || "Failed"); } finally { setSubmitting(false); }
   };
@@ -40,6 +44,16 @@ export default function DeoFacultyPage() {
         <Button onClick={() => { setShowForm(true); setError(""); }}><Plus className="h-4 w-4 mr-1" /> Add Faculty</Button>
       </div>
       {error && <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive border border-destructive/20">{error}</div>}
+      {createdPassword && (
+        <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-sm">
+          <p className="font-semibold text-green-800 mb-1">Faculty account created successfully!</p>
+          <p className="text-green-700">
+            Default login password: <code className="bg-green-100 px-2 py-0.5 rounded font-mono font-bold text-green-900">{createdPassword}</code>
+          </p>
+          <p className="text-green-600 text-xs mt-1">Please share these credentials with the faculty member.</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => setCreatedPassword(null)}>Dismiss</Button>
+        </div>
+      )}
       {showForm && (
         <Card><CardHeader><CardTitle>Add New Faculty</CardTitle></CardHeader><CardContent>
           <form onSubmit={handleSubmit} className="grid md:grid-cols-2 gap-4">

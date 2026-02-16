@@ -32,7 +32,7 @@ class Chromosome:
 
 
 class TimetableGenerator:
-    def __init__(self, courses: List[Course], faculty: List[Faculty], rooms: List[Room], batches: List[Batch], sections: List[Section] | None = None):
+    def __init__(self, courses: List[Course], faculty: List[Faculty], rooms: List[Room], batches: List[Batch], sections: List[Section] | None = None, periods_per_day: int = 8, working_days: List[str] | None = None):
         self.courses = courses
         self.faculty = faculty
         self.rooms = rooms
@@ -63,8 +63,9 @@ class TimetableGenerator:
             for b in batches:
                 self.sections.append({"id": str(b.id), "name": "default", "batch_id": str(b.id)})
 
-        self.days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
-        self.periods = list(range(1, 9))  # 8 periods per day
+        # ── Configurable schedule parameters ──
+        self.days = working_days if working_days else ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        self.periods = list(range(1, periods_per_day + 1))
         self.all_slots: List[Tuple[str, int]] = [(d, p) for d in self.days for p in self.periods]
 
         # --- GA parameters (tuned for convergence) ---

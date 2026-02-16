@@ -1,7 +1,9 @@
 from typing import List, Any
+import logging
 from fastapi import APIRouter, Depends, HTTPException
 from beanie.odm.fields import PydanticObjectId
 from app.api import deps
+from app.core import security
 from app.models.faculty import Faculty
 from app.models.users import User
 from app.models.courses import Course
@@ -11,8 +13,8 @@ from app.schemas.faculty import FacultyCreate, FacultyOut
 router = APIRouter()
 
 
-def _faculty_out(f: Faculty) -> dict:
-    return {
+def _faculty_out(f: Faculty, default_password: str = None) -> dict:
+    out = {
         "id": str(f.id),
         "name": f.name,
         "email": f.email,
@@ -22,13 +24,21 @@ def _faculty_out(f: Faculty) -> dict:
         "current_load_hours": f.current_load_hours,
         "busy_slots": [s.model_dump() for s in f.busy_slots] if f.busy_slots else [],
     }
+    if default_password:
+        out["default_password"] = default_password
+    return out
 
 
-@router.post("/", response_model=FacultyOut)
+@router.post("/")
 async def create_faculty(
     faculty_in: FacultyCreate,
     current_user: User = Depends(deps.get_current_admin_user),
 ) -> Any:
+    """
+    Create a new faculty member.
+    Automatically creates a user account (role=faculty) if one doesn't exist for the email.
+    Returns the faculty profile along with the auto-generated default password.
+    """
     faculty = Faculty(**faculty_in.model_dump(exclude={"can_teach_course_ids"}))
 
     # Handle linking courses
@@ -41,7 +51,29 @@ async def create_faculty(
         faculty.can_teach = courses
 
     await faculty.insert()
-    return _faculty_out(faculty)
+
+    # ── Auto-create user account for faculty login ──
+    default_password = None
+    existing_user = await User.find_one(User.email == faculty_in.email)
+    if not existing_user:
+        # Generate default password: email prefix + @123
+        default_password = faculty_in.email.split("@")[0] + "@123"
+        user = User(
+            email=faculty_in.email,
+            hashed_password=security.get_password_hash(default_password),
+            full_name=faculty_in.name,
+            role="faculty",
+        )
+        await user.insert()
+        logging.info(f"Auto-created user account for faculty: {faculty_in.email}")
+    else:
+        # If user exists but isn't faculty role, update role
+        if existing_user.role != "faculty":
+            existing_user.role = "faculty"
+            await existing_user.save()
+            logging.info(f"Updated existing user role to faculty: {faculty_in.email}")
+
+    return _faculty_out(faculty, default_password=default_password)
 
 
 @router.get("/", response_model=List[FacultyOut])
@@ -81,10 +113,17 @@ async def delete_faculty(
     current_user: User = Depends(deps.get_current_admin_user),
 ) -> Any:
     """
-    Delete a faculty member by ID.
+    Delete a faculty member by ID. Also deletes the associated user account.
     """
     faculty = await Faculty.get(id)
     if not faculty:
         raise HTTPException(status_code=404, detail="Faculty not found.")
+
+    # Also delete the associated user account
+    user = await User.find_one(User.email == faculty.email)
+    if user and user.role == "faculty":
+        await user.delete()
+        logging.info(f"Deleted user account for faculty: {faculty.email}")
+
     await faculty.delete()
     return {"detail": "Faculty deleted successfully.", "id": str(id)}

@@ -11,8 +11,12 @@ from app.models.faculty import Faculty
 from app.models.courses import Course
 from app.models.infrastructure import Room
 from app.models.programs import Program, Batch, Semester, Section
-from app.models.timetable import Timetable, TimetableEntry
-from app.schemas.timetable import TimetableOut, TimetableUpdateRequest, SimulationRequest, TimetableGenerateRequest, TimetableEntryOut
+from app.models.timetable import Timetable, TimetableEntry, ScheduleConfig, BreakSlot
+from app.schemas.timetable import (
+    TimetableOut, TimetableUpdateRequest, SimulationRequest,
+    TimetableGenerateRequest, TimetableEntryOut,
+    ScheduleConfigCreate, ScheduleConfigOut,
+)
 from app.services.generator import TimetableGenerator
 
 router = APIRouter()
@@ -171,12 +175,28 @@ async def generate_timetable(
     if not rooms:
         raise HTTPException(status_code=400, detail="No rooms found. Please add rooms/infrastructure before generating a timetable.")
 
+    # ── Fetch schedule config for this semester (if exists) ──
+    schedule_config = None
+    try:
+        configs = await ScheduleConfig.find(
+            {"semester.$id": semester.id}
+        ).to_list()
+        if configs:
+            schedule_config = configs[0]
+    except Exception:
+        pass  # Use defaults if no config found
+
+    periods_per_day = schedule_config.periods_per_day if schedule_config else 8
+    working_days = schedule_config.working_days if schedule_config else None
+
     generator = TimetableGenerator(
         courses=courses,
         faculty=faculty,
         rooms=rooms,
         batches=[batch],
         sections=sections_to_schedule if sections_to_schedule else None,
+        periods_per_day=periods_per_day,
+        working_days=working_days,
     )
     try:
         best_chromosome = generator.run()
@@ -380,3 +400,125 @@ async def delete_timetable(
         raise HTTPException(status_code=404, detail="Timetable not found.")
     await timetable.delete()
     return {"detail": "Timetable deleted successfully.", "id": str(id)}
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ─── Schedule Config CRUD ─────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════════
+
+async def _schedule_config_out(c: ScheduleConfig) -> dict:
+    semester_id = _extract_link_id(c.semester) or ""
+    semester_name = ""
+    if semester_id:
+        try:
+            sem = await Semester.get(PydanticObjectId(semester_id))
+            if sem:
+                semester_name = f"Sem {sem.number}" if hasattr(sem, "number") else sem.name
+        except Exception:
+            pass
+    return {
+        "id": str(c.id),
+        "semester_id": semester_id or None,
+        "semester_name": semester_name or None,
+        "name": c.name,
+        "start_time": c.start_time,
+        "period_duration_minutes": c.period_duration_minutes,
+        "periods_per_day": c.periods_per_day,
+        "breaks": [b.model_dump() for b in (c.breaks or [])],
+        "working_days": c.working_days or [],
+    }
+
+
+@router.get("/schedule-configs/", response_model=List[ScheduleConfigOut])
+async def get_schedule_configs(
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """List all schedule configurations."""
+    configs = await ScheduleConfig.find_all().to_list()
+    return [await _schedule_config_out(c) for c in configs]
+
+
+@router.post("/schedule-configs/", response_model=ScheduleConfigOut)
+async def create_schedule_config(
+    config_in: ScheduleConfigCreate,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """Create a new schedule configuration (timings, breaks, working days)."""
+    config = ScheduleConfig(
+        name=config_in.name,
+        start_time=config_in.start_time,
+        period_duration_minutes=config_in.period_duration_minutes,
+        periods_per_day=config_in.periods_per_day,
+        breaks=[BreakSlot(**b.model_dump()) for b in config_in.breaks],
+        working_days=config_in.working_days,
+    )
+    if config_in.semester_id:
+        sem = await Semester.get(PydanticObjectId(config_in.semester_id))
+        if sem:
+            config.semester = sem
+    await config.insert()
+    return await _schedule_config_out(config)
+
+
+@router.put("/schedule-configs/{config_id}", response_model=ScheduleConfigOut)
+async def update_schedule_config(
+    config_id: PydanticObjectId,
+    config_in: ScheduleConfigCreate,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """Update an existing schedule configuration."""
+    config = await ScheduleConfig.get(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Schedule config not found.")
+    config.name = config_in.name
+    config.start_time = config_in.start_time
+    config.period_duration_minutes = config_in.period_duration_minutes
+    config.periods_per_day = config_in.periods_per_day
+    config.breaks = [BreakSlot(**b.model_dump()) for b in config_in.breaks]
+    config.working_days = config_in.working_days
+    if config_in.semester_id:
+        sem = await Semester.get(PydanticObjectId(config_in.semester_id))
+        if sem:
+            config.semester = sem
+    else:
+        config.semester = None
+    await config.save()
+    return await _schedule_config_out(config)
+
+
+@router.delete("/schedule-configs/{config_id}")
+async def delete_schedule_config(
+    config_id: PydanticObjectId,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """Delete a schedule configuration."""
+    config = await ScheduleConfig.get(config_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Schedule config not found.")
+    await config.delete()
+    return {"detail": "Schedule config deleted.", "id": str(config_id)}
+
+
+@router.get("/schedule-configs/by-semester/{semester_id}", response_model=ScheduleConfigOut)
+async def get_schedule_config_by_semester(
+    semester_id: PydanticObjectId,
+    current_user: User = Depends(deps.get_current_active_user),
+) -> Any:
+    """Get schedule config for a specific semester."""
+    configs = await ScheduleConfig.find(
+        {"semester.$id": semester_id}
+    ).to_list()
+    if not configs:
+        # Return a default config
+        return {
+            "id": "",
+            "semester_id": str(semester_id),
+            "semester_name": None,
+            "name": "Default Schedule",
+            "start_time": "09:00",
+            "period_duration_minutes": 60,
+            "periods_per_day": 8,
+            "breaks": [],
+            "working_days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
+        }
+    return await _schedule_config_out(configs[0])

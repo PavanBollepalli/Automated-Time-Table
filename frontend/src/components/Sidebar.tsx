@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, Users, Calendar, BookOpen, Building2,
-  GraduationCap, LogOut, Bell, Shield, Layers, ClipboardList
+  GraduationCap, LogOut, Bell, Shield, Layers, ClipboardList, Clock
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { label: "Rooms", icon: Building2, href: "/admin/rooms", roles: ["admin"] },
   { label: "Generate Timetable", icon: Calendar, href: "/admin/generate", roles: ["admin"] },
   { label: "All Timetables", icon: Layers, href: "/admin/timetables", roles: ["admin"] },
+  { label: "Schedule Settings", icon: Clock, href: "/admin/schedule", roles: ["admin"] },
   { label: "User Management", icon: ClipboardList, href: "/admin/users", roles: ["admin"] },
   // Faculty
   { label: "Dashboard", icon: LayoutDashboard, href: "/faculty", roles: ["faculty"] },
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { label: "Rooms", icon: Building2, href: "/deo/rooms", roles: ["deo"] },
   { label: "Generate Timetable", icon: Calendar, href: "/deo/generate", roles: ["deo"] },
   { label: "Timetables", icon: Layers, href: "/deo/timetables", roles: ["deo"] },
+  { label: "Schedule Settings", icon: Clock, href: "/deo/schedule", roles: ["deo"] },
 ];
 
 export function Sidebar() {

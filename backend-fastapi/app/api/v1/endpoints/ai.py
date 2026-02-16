@@ -19,7 +19,7 @@ from app.models.users import User
 from app.models.faculty import Faculty
 from app.models.courses import Course
 from app.models.infrastructure import Room
-from app.models.programs import Program, Batch, Semester
+from app.models.programs import Program, Batch, Semester, Section
 from app.models.timetable import Timetable
 
 router = APIRouter()
@@ -131,33 +131,156 @@ async def _build_timetable_context(timetable_id: Optional[str] = None) -> str:
         parts.append("PROGRAMS:\n" + "\n".join(prog_lines))
 
     # Timetable entries (specific or all)
+    from beanie.odm.fields import PydanticObjectId
+    all_timetables = []
     if timetable_id:
-        from beanie.odm.fields import PydanticObjectId
         tt = await Timetable.get(PydanticObjectId(timetable_id))
         if tt and tt.entries:
-            _append_timetable_entries(parts, tt, "SELECTED TIMETABLE")
+            label = await _timetable_label(tt)
+            _append_timetable_entries(parts, tt, label)
+            all_timetables.append((tt, label))
     else:
         timetables = await Timetable.find_all().to_list()
-        for tt in timetables[:3]:  # limit to 3 most recent
-            _append_timetable_entries(parts, tt, f"TIMETABLE {tt.id}")
+        for tt in timetables[:5]:  # up to 5
+            label = await _timetable_label(tt)
+            _append_timetable_entries(parts, tt, label)
+            all_timetables.append((tt, label))
+
+    # Faculty-centric schedule (combined across all timetables)
+    if all_timetables:
+        faculty_schedule = _build_faculty_schedule(all_timetables)
+        if faculty_schedule:
+            parts.append(faculty_schedule)
 
     return "\n\n".join(parts)
 
 
+def _extract_link_id(link_field):
+    """Extract the string ID from a Beanie Link or document."""
+    if link_field is None:
+        return None
+    if hasattr(link_field, "id"):
+        return str(link_field.id)
+    if hasattr(link_field, "ref") and link_field.ref:
+        return str(link_field.ref.id)
+    return None
+
+
+async def _timetable_label(tt: Timetable) -> str:
+    """Build a human-readable label like 'B.Tech CSE – Sem 3 – Section A' for a timetable."""
+    from beanie.odm.fields import PydanticObjectId
+    label_parts = []
+    try:
+        pid = _extract_link_id(tt.program)
+        if pid:
+            prog = await Program.get(PydanticObjectId(pid))
+            if prog:
+                label_parts.append(prog.name)
+    except Exception:
+        pass
+    try:
+        sid = _extract_link_id(tt.semester)
+        if sid:
+            sem = await Semester.get(PydanticObjectId(sid))
+            if sem:
+                label_parts.append(f"Sem {sem.number}" if hasattr(sem, "number") and sem.number else sem.name)
+    except Exception:
+        pass
+    try:
+        sec_id = _extract_link_id(tt.section)
+        if sec_id:
+            sec = await Section.get(PydanticObjectId(sec_id))
+            if sec:
+                label_parts.append(f"Section {sec.name}")
+    except Exception:
+        pass
+    return " – ".join(label_parts) if label_parts else f"Timetable {tt.id}"
+
+
 def _append_timetable_entries(parts: list, tt, label: str):
-    """Format timetable entries compactly."""
+    """Format timetable entries as a compact day-wise table per section."""
     if not tt.entries:
         return
-    lines = [f"  {e.day} P{e.period}: {e.course_name} by {e.faculty_name} in {e.room_name}" for e in tt.entries]
-    # Group by day for readability
-    day_groups = {}
+    day_groups: dict[str, list] = {}
     for e in tt.entries:
-        day_groups.setdefault(e.day, []).append(f"P{e.period}: {e.course_name} ({e.faculty_name}, {e.room_name})")
+        day_groups.setdefault(e.day, []).append(e)
     formatted = []
-    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
-        if day in day_groups:
-            formatted.append(f"  {day}: " + " | ".join(sorted(day_groups[day])))
-    parts.append(f"{label} ({len(tt.entries)} entries):\n" + "\n".join(formatted))
+    for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]:
+        if day not in day_groups:
+            continue
+        entries_sorted = sorted(day_groups[day], key=lambda x: x.period)
+        slots = [f"P{e.period}-{e.course_name}({e.faculty_name},{e.room_name})" for e in entries_sorted]
+        formatted.append(f"  {day}: {' | '.join(slots)}")
+    parts.append(f"[{label}]:\n" + "\n".join(formatted))
+
+
+def _build_faculty_schedule(timetables_with_labels: list) -> str:
+    """Build a faculty-centric combined schedule across all timetables.
+    
+    Output format per faculty:
+      FACULTY SCHEDULE: Dr. X
+        Monday: P2-Os-B201-Sec B | P5-ES-B201-Sec A | ...
+        Tuesday: ...
+        Free periods: Monday(P1,P3,P6,P7), Tuesday(...)
+    """
+    DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
+    # Collect: faculty_name -> day -> list of (period, course, room, section_label)
+    fac_map: dict[str, dict[str, list]] = {}
+    # Figure out max period across all entries
+    max_period = 8
+    
+    for tt, label in timetables_with_labels:
+        if not tt.entries:
+            continue
+        # Extract short section label from timetable label, e.g. "Section A" -> "Sec A"
+        sec_short = ""
+        if "Section" in label:
+            sec_short = label.split("Section")[-1].strip()
+            sec_short = f"Sec {sec_short}"
+        elif "Sec" in label:
+            sec_short = label.split("–")[-1].strip() if "–" in label else ""
+        else:
+            sec_short = label.split("–")[-1].strip() if "–" in label else label
+        
+        for e in tt.entries:
+            fname = e.faculty_name.strip()
+            if not fname:
+                continue
+            if fname not in fac_map:
+                fac_map[fname] = {}
+            if e.day not in fac_map[fname]:
+                fac_map[fname][e.day] = []
+            fac_map[fname][e.day].append((e.period, e.course_name, e.room_name, sec_short))
+            if e.period > max_period:
+                max_period = e.period
+    
+    if not fac_map:
+        return ""
+    
+    lines = ["FACULTY SCHEDULES (combined across all sections):"]
+    for fname in sorted(fac_map.keys()):
+        lines.append(f"\n  {fname}:")
+        occupied_by_day: dict[str, set] = {}
+        for day in DAYS:
+            if day not in fac_map[fname]:
+                continue
+            entries = sorted(fac_map[fname][day], key=lambda x: x[0])
+            occupied_by_day[day] = {e[0] for e in entries}
+            slots = [f"P{p}-{course}({room},{sec})" for p, course, room, sec in entries]
+            lines.append(f"    {day}: {' | '.join(slots)}")
+        # Free periods
+        all_periods = set(range(1, max_period + 1))
+        free_parts = []
+        for day in DAYS:
+            occupied = occupied_by_day.get(day, set())
+            free = sorted(all_periods - occupied)
+            if free and day in occupied_by_day:
+                free_str = ",".join(f"P{p}" for p in free)
+                free_parts.append(f"{day}({free_str})")
+        if free_parts:
+            lines.append(f"    Free: {' | '.join(free_parts)}")
+    
+    return "\n".join(lines)
 
 
 # ─── Endpoints ───
@@ -173,19 +296,39 @@ async def ai_chat(
     """
     context = await _build_timetable_context(req.timetable_id)
 
-    system_prompt = f"""You are IntelliScheduler AI, an intelligent assistant for a university timetable management system.
-You have access to the following LIVE DATA from the system:
+    system_prompt = f"""You are IntelliScheduler AI, a university timetable assistant.
 
+LIVE DATA:
 {context}
 
-Rules:
-- Answer questions accurately based on the data above.
-- If asked about something not in the data, say so honestly.
-- Be concise and helpful. Use bullet points for lists.
-- For scheduling questions, reference specific days, periods, rooms, and faculty.
-- You can suggest improvements or flag potential issues you notice.
-- Format responses in clean markdown.
-- Never make up data that isn't provided above."""
+RESPONSE RULES:
+1. Answer ONLY from the data above. If data is missing, say so.
+2. NEVER show database IDs. Use the full timetable labels from the data (e.g. "Computer Science and Engineering - AI & ML – Sem 3 – Section A").
+3. Keep responses clear and structured.
+
+FORMATTING FOR FACULTY SCHEDULE QUESTIONS:
+When asked about a teacher's classes on a specific day, respond with a bullet list. Each bullet should follow this EXACT format:
+• CourseName (in room RoomName) during period P# for FullTimetableLabel
+
+Example:
+Dr. X has the following classes on Monday:
+• Os (in room B-201) during period P2 for CSE AI&ML – Sem 3 – Section B
+• DSA (in room A-102) during period P4 for CSE AI&ML – Sem 3 – Section A
+
+Then on a new line:
+Free periods: P1, P3, P5, P6, P7
+
+IMPORTANT:
+- Use the timetable label from the data (the text in square brackets like [Computer Science and Engineering - AI & ML – Sem 3 – Section B]). Remove the square brackets but SHORTEN the program name to its abbreviation (e.g. "Computer Science and Engineering - AI & ML" becomes "CSE AI&ML", "Mechanical Engineering" becomes "ME", "Electronics and Communication Engineering" becomes "ECE"). Keep Sem and Section in full.
+- Example shortened label: "CSE AI&ML – Sem 3 – Section B"
+- Do NOT use tables for faculty schedule questions. Use bullet points only.
+- Sort the bullets by period number.
+
+FOR OTHER QUESTIONS:
+- Use markdown tables for tabular data when appropriate.
+- Use bullet points for lists. Keep it concise.
+- Bold key information.
+- You may suggest improvements or flag issues you notice."""
 
     reply = await _call_groq(system_prompt, req.message)
     return {"reply": reply}

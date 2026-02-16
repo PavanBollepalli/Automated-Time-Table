@@ -242,4 +242,67 @@ export const deleteUser = async (userId: string) => {
   return data;
 };
 
+// ─── Schedule Config ───
+export interface BreakSlot {
+  after_period: number;
+  duration_minutes: number;
+  name: string;
+}
+
+export interface ScheduleConfig {
+  id: string;
+  semester_id?: string | null;
+  semester_name?: string | null;
+  name: string;
+  start_time: string;
+  period_duration_minutes: number;
+  periods_per_day: number;
+  breaks: BreakSlot[];
+  working_days: string[];
+}
+
+export const getScheduleConfigs = async (): Promise<ScheduleConfig[]> => {
+  const { data } = await apiClient.get("/timetables/schedule-configs/");
+  return data;
+};
+
+export const createScheduleConfig = async (config: {
+  semester_id?: string;
+  name: string;
+  start_time: string;
+  period_duration_minutes: number;
+  periods_per_day: number;
+  breaks: BreakSlot[];
+  working_days: string[];
+}): Promise<ScheduleConfig> => {
+  const { data } = await apiClient.post("/timetables/schedule-configs/", config);
+  return data;
+};
+
+export const updateScheduleConfig = async (
+  configId: string,
+  config: {
+    semester_id?: string;
+    name: string;
+    start_time: string;
+    period_duration_minutes: number;
+    periods_per_day: number;
+    breaks: BreakSlot[];
+    working_days: string[];
+  }
+): Promise<ScheduleConfig> => {
+  const { data } = await apiClient.put(`/timetables/schedule-configs/${configId}`, config);
+  return data;
+};
+
+export const deleteScheduleConfig = async (configId: string) => {
+  const { data } = await apiClient.delete(`/timetables/schedule-configs/${configId}`);
+  return data;
+};
+
+export const getScheduleConfigBySemester = async (semesterId: string): Promise<ScheduleConfig> => {
+  const { data } = await apiClient.get(`/timetables/schedule-configs/by-semester/${semesterId}`);
+  return data;
+};
+
 export default apiClient;

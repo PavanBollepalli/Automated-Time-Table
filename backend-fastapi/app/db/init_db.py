@@ -6,7 +6,7 @@ from app.models.programs import Program, Batch, Semester, Section
 from app.models.courses import Course
 from app.models.faculty import Faculty
 from app.models.infrastructure import Room
-from app.models.timetable import Timetable
+from app.models.timetable import Timetable, ScheduleConfig
 
 async def init_db():
     client = AsyncIOMotorClient(settings.MONGODB_URI)
@@ -22,5 +22,6 @@ async def init_db():
             Faculty,
             Room,
             Timetable,
+            ScheduleConfig,
         ],
     )

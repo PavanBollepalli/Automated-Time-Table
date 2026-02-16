@@ -18,6 +18,7 @@ export default function FacultyPage() {
   const [form, setForm] = useState<any>({ can_teach_course_ids: [], busy_slots: [] });
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -37,7 +38,7 @@ export default function FacultyPage() {
     e.preventDefault();
     setSubmitting(true); setError("");
     try {
-      await createFaculty({
+      const result = await createFaculty({
         name: form.name,
         email: form.email,
         department: form.department,
@@ -46,6 +47,9 @@ export default function FacultyPage() {
         can_teach_course_ids: selectedCourses,
         busy_slots: [],
       });
+      if (result?.default_password) {
+        setCreatedPassword(result.default_password);
+      }
       setShowForm(false); setForm({ can_teach_course_ids: [], busy_slots: [] }); setSelectedCourses([]); load();
     } catch (err: any) {
       setError(err?.response?.data?.detail || "Failed to add faculty");
@@ -74,6 +78,17 @@ export default function FacultyPage() {
       </div>
 
       {error && <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive border border-destructive/20">{error}</div>}
+
+      {createdPassword && (
+        <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-sm">
+          <p className="font-semibold text-green-800 mb-1">Faculty account created successfully!</p>
+          <p className="text-green-700">
+            Default login password: <code className="bg-green-100 px-2 py-0.5 rounded font-mono font-bold text-green-900">{createdPassword}</code>
+          </p>
+          <p className="text-green-600 text-xs mt-1">Please share these credentials with the faculty member. They can change the password after first login.</p>
+          <Button variant="outline" size="sm" className="mt-2" onClick={() => setCreatedPassword(null)}>Dismiss</Button>
+        </div>
+      )}
 
       {showForm && (
         <Card>
