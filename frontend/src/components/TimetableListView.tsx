@@ -182,7 +182,7 @@ export default function TimetableListView({
             </div>
 
             {analysis && (
-              <div className="mb-4 p-4 bg-gradient-to-r from-primary/5 to-orange-50 border border-primary/20 rounded-xl">
+              <div className="mb-4 p-4 bg-gradient-to-r from-primary/5 to-indigo-50 border border-primary/20 rounded-xl">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="h-4 w-4 text-primary" />
                   <h4 className="font-semibold text-sm text-primary">AI Quality Analysis</h4>

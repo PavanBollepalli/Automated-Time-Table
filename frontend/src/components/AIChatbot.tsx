@@ -80,7 +80,7 @@ export function AIChatbot() {
       {!open && (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-primary to-orange-400 text-white shadow-lg hover:shadow-xl transition-all hover:scale-105 flex items-center justify-center"
+          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-gradient-to-br from-indigo-600 to-blue-500 text-white shadow-lg shadow-indigo-500/25 hover:shadow-xl transition-all hover:scale-105 flex items-center justify-center"
         >
           <Sparkles className="h-6 w-6" />
         </button>
@@ -90,7 +90,7 @@ export function AIChatbot() {
       {open && (
         <div className="fixed bottom-6 right-6 z-50 w-[400px] h-[540px] bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-primary to-orange-400 text-white">
+          <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-600 to-blue-500 text-white">
             <div className="flex items-center gap-2">
               <Bot className="h-5 w-5" />
               <span className="font-semibold text-sm">IntelliScheduler AI</span>
@@ -105,7 +105,7 @@ export function AIChatbot() {
             {messages.map((m, i) => (
               <div key={i} className={`flex gap-2 ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 {m.role === "assistant" && (
-                  <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-600 to-blue-500 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Bot className="h-3.5 w-3.5 text-white" />
                   </div>
                 )}
@@ -127,7 +127,7 @@ export function AIChatbot() {
             ))}
             {loading && (
               <div className="flex gap-2 justify-start">
-                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-primary to-orange-400 flex items-center justify-center flex-shrink-0">
+                <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-600 to-blue-500 flex items-center justify-center flex-shrink-0">
                   <Bot className="h-3.5 w-3.5 text-white" />
                 </div>
                 <div className="bg-muted rounded-2xl rounded-bl-md px-4 py-3">

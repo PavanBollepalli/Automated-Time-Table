@@ -35,7 +35,7 @@ const CATEGORY_COLORS: Record<string, { bg: string; text: string }> = {
   "Data Quality":          { bg: "bg-red-50",     text: "text-red-600" },
   "Resource Optimization": { bg: "bg-blue-50",    text: "text-blue-600" },
   "Faculty Workload":      { bg: "bg-violet-50",  text: "text-violet-600" },
-  "Scheduling":            { bg: "bg-orange-50",  text: "text-orange-600" },
+  "Scheduling":            { bg: "bg-indigo-50",  text: "text-indigo-600" },
   "Quick Win":             { bg: "bg-emerald-50", text: "text-emerald-600" },
 };
 
@@ -78,7 +78,7 @@ export default function AdminDashboard() {
     { label: "Programs", value: stats.programs, icon: GraduationCap, color: "text-blue-500", bg: "bg-blue-50" },
     { label: "Courses", value: stats.courses, icon: BookOpen, color: "text-emerald-500", bg: "bg-emerald-50" },
     { label: "Faculty", value: stats.faculty, icon: Users, color: "text-violet-500", bg: "bg-violet-50" },
-    { label: "Rooms", value: stats.rooms, icon: Building2, color: "text-orange-500", bg: "bg-orange-50" },
+    { label: "Rooms", value: stats.rooms, icon: Building2, color: "text-cyan-500", bg: "bg-cyan-50" },
     { label: "Timetables", value: stats.timetables, icon: Calendar, color: "text-rose-500", bg: "bg-rose-50" },
   ];
 

@@ -56,7 +56,7 @@ export function Sidebar() {
     <div className="flex flex-col h-full bg-card border-r border-border">
       <div className="flex h-[60px] items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2.5">
-          <div className="h-7 w-7 bg-gradient-to-br from-primary to-orange-400 rounded-lg shadow-sm" />
+          <div className="h-7 w-7 bg-gradient-to-br from-indigo-600 to-blue-500 rounded-lg shadow-sm" />
           <span className="font-bold text-lg tracking-tight">IntelliScheduler</span>
         </Link>
       </div>

@@ -353,7 +353,7 @@ export default function ProgramsPage() {
                           ))}
                           {unassigned.length > 0 && (
                             <div className="space-y-2">
-                              <h5 className="text-sm font-medium text-orange-600 bg-orange-50 px-3 py-1.5 rounded-md">No Semester Assigned &mdash; {unassigned.length} course(s)</h5>
+                              <h5 className="text-sm font-medium text-amber-600 bg-amber-50 px-3 py-1.5 rounded-md">No Semester Assigned &mdash; {unassigned.length} course(s)</h5>
                               <div className="overflow-x-auto">
                                 <table className="w-full text-xs">
                                   <thead><tr className="border-b bg-muted/40">
@@ -368,7 +368,7 @@ export default function ProgramsPage() {
                                         <td className="py-2 px-3 font-mono">{c.code}</td>
                                         <td className="py-2 px-3">{c.name}</td>
                                         <td className="py-2 px-3">{c.credits}</td>
-                                        <td className="py-2 px-3"><span className="bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">{c.type}</span></td>
+                                        <td className="py-2 px-3"><span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">{c.type}</span></td>
                                       </tr>
                                     ))}
                                   </tbody>

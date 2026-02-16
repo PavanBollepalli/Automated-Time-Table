@@ -26,45 +26,44 @@
 }
 
 :root {
-  /* Nuetral-50 Background base - Clean & Light */
-  --background: 0 0% 100%; /* Pure White for a cleaner look or 210 40% 98% for subtle cool gray */
-  --foreground: 240 10% 3.9%; /* Near Black */
+  /* Clean white background with cool undertone */
+  --background: 210 20% 99%; /* Barely-there cool white */
+  --foreground: 222 47% 11%; /* Slate-900 - rich dark text */
 
-  /* White Cards with subtle shadow definition */
+  /* Cards - pure white to pop on the subtle bg */
   --card: 0 0% 100%;
-  --card-foreground: 240 10% 3.9%;
+  --card-foreground: 222 47% 11%;
 
   --popover: 0 0% 100%;
-  --popover-foreground: 240 10% 3.9%;
+  --popover-foreground: 222 47% 11%;
 
-  /* Orange-500 Primary Accent - Vibrant & Energetic */
-  /* HSL: 24, 95%, 53% */
-  --primary: 24.6 95% 53.1%;
-  --primary-foreground: 0 0% 98%;
+  /* Indigo-600 Primary - Professional & Trustworthy */
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
 
-  /* Neutral-100 for Secondary actions */
-  --secondary: 240 4.8% 95.9%;
-  --secondary-foreground: 240 5.9% 10%;
+  /* Slate-100 for Secondary actions */
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222 47% 11%;
 
-  /* Neutral-100 for Muted backgrounds */
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
+  /* Slate-100 for Muted backgrounds */
+  --muted: 210 40% 96%;
+  --muted-foreground: 215 16% 47%;
 
-  /* Subtle Accent for hover states */
-  --accent: 240 4.8% 95.9%;
-  --accent-foreground: 240 5.9% 10%;
+  /* Subtle indigo accent for hover states */
+  --accent: 226 100% 97%;
+  --accent-foreground: 222 47% 11%;
 
   --destructive: 0 84.2% 60.2%;
   --destructive-foreground: 0 0% 98%;
 
-  /* Neutral-200 for Borders - Crisp but not harsh */
-  --border: 240 5.9% 90%;
-  --input: 240 5.9% 90%;
+  /* Slate-200 for Borders */
+  --border: 214 32% 91%;
+  --input: 214 32% 91%;
   
-  /* Orange Ring for focus */
-  --ring: 24.6 95% 53.1%;
+  /* Indigo Ring for focus */
+  --ring: 239 84% 67%;
 
-  --radius: 0.75rem; /* Slightly more rounded for modern feel */
+  --radius: 0.75rem;
 }
 
 body {
