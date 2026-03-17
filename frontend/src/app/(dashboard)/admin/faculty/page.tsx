@@ -90,7 +90,8 @@ export default function FacultyPage() {
       designation: f.designation,
       max_load_hours: f.max_load_hours,
     });
-    setEditSelectedCourses([]);
+    // Load the courses this faculty can teach
+    setEditSelectedCourses(f.can_teach_course_ids || []);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -187,90 +188,159 @@ export default function FacultyPage() {
 
       {/* Edit Faculty Dialog */}
       <Dialog open={!!editingFaculty} onOpenChange={() => setEditingFaculty(null)}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Faculty</DialogTitle>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="space-y-3">
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="text-2xl font-bold text-primary">
+                  {editForm.name ? editForm.name.charAt(0).toUpperCase() : "?"}
+                </span>
+              </div>
+              <div>
+                <DialogTitle className="text-xl">Edit Faculty</DialogTitle>
+                <p className="text-sm text-muted-foreground">{editingFaculty?.email}</p>
+              </div>
+            </div>
           </DialogHeader>
-          <form onSubmit={handleEditSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Full Name</Label>
-              <Input
-                value={editForm.name || ""}
-                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={editForm.email || ""} disabled className="bg-muted" />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-            </div>
-            <div className="space-y-2">
-              <Label>Department</Label>
-              <Input
-                value={editForm.department || ""}
-                onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Designation</Label>
-              <select
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={editForm.designation || ""}
-                onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
-                required
-              >
-                <option value="">Select designation</option>
-                <option value="Professor">Professor</option>
-                <option value="Associate Professor">Associate Professor</option>
-                <option value="Assistant Professor">Assistant Professor</option>
-                <option value="Lecturer">Lecturer</option>
-                <option value="Visiting Faculty">Visiting Faculty</option>
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label>Max Load Hours/week</Label>
-              <Input
-                type="number"
-                value={editForm.max_load_hours || ""}
-                onChange={(e) => setEditForm({ ...editForm, max_load_hours: e.target.value })}
-              />
+          <form onSubmit={handleEditSubmit} className="space-y-5">
+            {/* Basic Info Section */}
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-name" className="text-sm font-medium">Full Name</Label>
+                  <Input
+                    id="edit-name"
+                    value={editForm.name || ""}
+                    onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    placeholder="Dr. John Doe"
+                    required
+                    className="h-10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-dept" className="text-sm font-medium">Department</Label>
+                  <Input
+                    id="edit-dept"
+                    value={editForm.department || ""}
+                    onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                    placeholder="Computer Science"
+                    required
+                    className="h-10"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-designation" className="text-sm font-medium">Designation</Label>
+                  <select
+                    id="edit-designation"
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:ring-2 focus:ring-primary focus:ring-offset-2"
+                    value={editForm.designation || ""}
+                    onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
+                    required
+                  >
+                    <option value="">Select designation</option>
+                    <option value="Professor">Professor</option>
+                    <option value="Associate Professor">Associate Professor</option>
+                    <option value="Assistant Professor">Assistant Professor</option>
+                    <option value="Lecturer">Lecturer</option>
+                    <option value="Visiting Faculty">Visiting Faculty</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-load" className="text-sm font-medium">Max Load (hours/week)</Label>
+                  <Input
+                    id="edit-load"
+                    type="number"
+                    min="1"
+                    max="40"
+                    value={editForm.max_load_hours || ""}
+                    onChange={(e) => setEditForm({ ...editForm, max_load_hours: e.target.value })}
+                    placeholder="18"
+                    className="h-10"
+                  />
+                </div>
+              </div>
             </div>
 
+            {/* Current Designation Badge */}
+            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+              <span className="text-sm text-muted-foreground">Current Status:</span>
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary">
+                {editForm.designation || "Not set"}
+              </span>
+            </div>
+
+            {/* Courses Section */}
             <div className="space-y-2">
-              <Label>Can Teach Courses</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Can Teach Courses</Label>
+                <span className="text-xs text-muted-foreground">
+                  {editSelectedCourses.length} selected
+                </span>
+              </div>
               {courses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No courses available</p>
+                <p className="text-sm text-muted-foreground p-4 bg-muted/30 rounded-lg text-center">
+                  No courses available. Add courses first.
+                </p>
               ) : (
-                <div className="flex flex-wrap gap-2 p-3 border rounded-md max-h-40 overflow-y-auto">
-                  {courses.map((c: any) => (
-                    <button
-                      type="button"
-                      key={c.id}
-                      onClick={() => toggleEditCourse(c.id)}
-                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
-                        editSelectedCourses.includes(c.id)
-                          ? "bg-primary text-white border-primary"
-                          : "bg-muted/40 hover:bg-muted"
-                      }`}
-                    >
-                      {c.code} – {c.name}
-                    </button>
-                  ))}
+                <div className="border rounded-lg p-3 max-h-48 overflow-y-auto">
+                  <div className="flex flex-wrap gap-2">
+                    {courses.map((c: any) => (
+                      <button
+                        type="button"
+                        key={c.id}
+                        onClick={() => toggleEditCourse(c.id)}
+                        className={`text-xs px-3 py-2 rounded-md border transition-all duration-200 ${
+                          editSelectedCourses.includes(c.id)
+                            ? "bg-primary text-white border-primary shadow-sm"
+                            : "bg-background hover:bg-muted border-border"
+                        }`}
+                      >
+                        <span className="font-medium">{c.code}</span>
+                        <span className="ml-1 opacity-75">{c.name}</span>
+                        {editSelectedCourses.includes(c.id) && (
+                          <span className="ml-1">✓</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
 
-            {error && <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive">{error}</div>}
+            {error && (
+              <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive border border-destructive/20 flex items-center gap-2">
+                <span>⚠️</span>
+                {error}
+              </div>
+            )}
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setEditingFaculty(null)}>
+            <DialogFooter className="gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => setEditingFaculty(null)}
+                className="flex-1"
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={editSubmitting}>
-                {editSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
-                Save Changes
+              <Button 
+                type="submit" 
+                disabled={editSubmitting}
+                className="flex-1"
+              >
+                {editSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    Save Changes
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </form>

@@ -14,6 +14,14 @@ router = APIRouter()
 
 
 def _faculty_out(f: Faculty, default_password: str = None) -> dict:
+    # Extract can_teach course IDs
+    can_teach_ids = []
+    for c in (f.can_teach or []):
+        if hasattr(c, 'id'):
+            can_teach_ids.append(str(c.id))
+        elif hasattr(c, 'ref'):
+            can_teach_ids.append(str(c.ref.id))
+    
     out = {
         "id": str(f.id),
         "name": f.name,
@@ -23,6 +31,7 @@ def _faculty_out(f: Faculty, default_password: str = None) -> dict:
         "max_load_hours": f.max_load_hours,
         "current_load_hours": f.current_load_hours,
         "busy_slots": [s.model_dump() for s in f.busy_slots] if f.busy_slots else [],
+        "can_teach_course_ids": can_teach_ids,
     }
     if default_password:
         out["default_password"] = default_password
