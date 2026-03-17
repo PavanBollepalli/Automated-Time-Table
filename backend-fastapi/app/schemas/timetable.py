@@ -22,6 +22,7 @@ class TimetableGenerateRequest(BaseModel):
     batch_id: PydanticObjectId
     semester_id: PydanticObjectId
     section_ids: Optional[List[str]] = None  # If None, generate for all sections in the batch
+    faculty_ids: Optional[List[str]] = None  # If provided, only use these faculty for generation
 
 class TimetableEntryOut(BaseModel):
     entry_id: Optional[str] = None

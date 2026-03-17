@@ -5,8 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getFaculty, createFaculty, getCourses, deleteFaculty } from "@/lib/api";
-import { Loader2, Plus, Users, Trash2 } from "lucide-react";
+import { getFaculty, createFaculty, getCourses, deleteFaculty, updateFaculty } from "@/lib/api";
+import { Loader2, Plus, Users, Trash2, Pencil } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 export default function FacultyPage() {
   const [faculty, setFaculty] = useState<any[]>([]);
@@ -19,6 +26,12 @@ export default function FacultyPage() {
   const [selectedCourses, setSelectedCourses] = useState<string[]>([]);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [createdPassword, setCreatedPassword] = useState<string | null>(null);
+  
+  // Edit state
+  const [editingFaculty, setEditingFaculty] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [editSelectedCourses, setEditSelectedCourses] = useState<string[]>([]);
+  const [editSubmitting, setEditSubmitting] = useState(false);
 
   const load = () => {
     setLoading(true);
@@ -66,6 +79,46 @@ export default function FacultyPage() {
       setError(err?.response?.data?.detail || "Failed to delete faculty");
     }
     setDeleting(null);
+  };
+
+  const handleEdit = (f: any) => {
+    setEditingFaculty(f);
+    setEditForm({
+      name: f.name,
+      email: f.email,
+      department: f.department,
+      designation: f.designation,
+      max_load_hours: f.max_load_hours,
+    });
+    setEditSelectedCourses([]);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingFaculty) return;
+    setEditSubmitting(true);
+    setError("");
+    try {
+      await updateFaculty(editingFaculty.id, {
+        name: editForm.name,
+        department: editForm.department,
+        designation: editForm.designation,
+        max_load_hours: parseInt(editForm.max_load_hours) || 18,
+        can_teach_course_ids: editSelectedCourses,
+      });
+      setEditingFaculty(null);
+      load();
+    } catch (err: any) {
+      setError(err?.response?.data?.detail || "Failed to update faculty");
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const toggleEditCourse = (id: string) => {
+    setEditSelectedCourses((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
   };
 
   if (loading) return <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -132,6 +185,98 @@ export default function FacultyPage() {
         </Card>
       )}
 
+      {/* Edit Faculty Dialog */}
+      <Dialog open={!!editingFaculty} onOpenChange={() => setEditingFaculty(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Faculty</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                value={editForm.name || ""}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input value={editForm.email || ""} disabled className="bg-muted" />
+              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Input
+                value={editForm.department || ""}
+                onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Designation</Label>
+              <select
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editForm.designation || ""}
+                onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })}
+                required
+              >
+                <option value="">Select designation</option>
+                <option value="Professor">Professor</option>
+                <option value="Associate Professor">Associate Professor</option>
+                <option value="Assistant Professor">Assistant Professor</option>
+                <option value="Lecturer">Lecturer</option>
+                <option value="Visiting Faculty">Visiting Faculty</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Max Load Hours/week</Label>
+              <Input
+                type="number"
+                value={editForm.max_load_hours || ""}
+                onChange={(e) => setEditForm({ ...editForm, max_load_hours: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Can Teach Courses</Label>
+              {courses.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No courses available</p>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-3 border rounded-md max-h-40 overflow-y-auto">
+                  {courses.map((c: any) => (
+                    <button
+                      type="button"
+                      key={c.id}
+                      onClick={() => toggleEditCourse(c.id)}
+                      className={`text-xs px-3 py-1.5 rounded-full border transition-colors ${
+                        editSelectedCourses.includes(c.id)
+                          ? "bg-primary text-white border-primary"
+                          : "bg-muted/40 hover:bg-muted"
+                      }`}
+                    >
+                      {c.code} – {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {error && <div className="p-3 rounded-lg bg-destructive/10 text-sm text-destructive">{error}</div>}
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditingFaculty(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={editSubmitting}>
+                {editSubmitting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {faculty.length === 0 ? (
         <Card className="border-dashed"><CardContent className="flex flex-col items-center justify-center py-12 text-center">
           <Users className="h-12 w-12 text-muted-foreground/50 mb-4" />
@@ -150,6 +295,9 @@ export default function FacultyPage() {
                   </div>
                   <div className="flex items-center gap-1">
                     <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{f.designation}</span>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(f)}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDelete(f.id)} disabled={deleting === f.id}>
                       {deleting === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                     </Button>

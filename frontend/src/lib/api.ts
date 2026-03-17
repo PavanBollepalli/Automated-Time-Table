@@ -140,6 +140,15 @@ export const createFaculty = async (faculty: {
   return data;
 };
 
+export const updateFaculty = async (id: string, faculty: {
+  name?: string; email?: string; department?: string; designation?: string;
+  max_load_hours?: number; can_teach_course_ids?: string[];
+  busy_slots?: { day: string; periods: number[] }[];
+}) => {
+  const { data } = await apiClient.put(`/faculty/${id}`, faculty);
+  return data;
+};
+
 export const deleteFaculty = async (id: string) => {
   const { data } = await apiClient.delete(`/faculty/${id}`);
   return data;
@@ -177,12 +186,13 @@ export const getTimetable = async (id: string) => {
   return data;
 };
 
-export const generateTimetable = async (programId: string, batchId: string, semesterId: string, sectionIds?: string[]) => {
+export const generateTimetable = async (programId: string, batchId: string, semesterId: string, sectionIds?: string[], facultyIds?: string[]) => {
   const { data } = await apiClient.post("/timetables/generate", {
     program_id: programId,
     batch_id: batchId,
     semester_id: semesterId,
     section_ids: sectionIds || undefined,
+    faculty_ids: facultyIds || undefined,
   });
   return data;
 };

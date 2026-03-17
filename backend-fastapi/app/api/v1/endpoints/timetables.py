@@ -165,12 +165,24 @@ async def generate_timetable(
     courses = await Course.find(
         {"program.$id": program.id, "semester.$id": semester.id}
     ).to_list()
-    faculty = await Faculty.find_all().to_list()
+    
+    # Filter faculty if specific faculty_ids are provided
+    if gen_request.faculty_ids:
+        faculty = []
+        for fid in gen_request.faculty_ids:
+            f = await Faculty.get(fid)
+            if f:
+                faculty.append(f)
+    else:
+        faculty = await Faculty.find_all().to_list()
+    
     rooms = await Room.find_all().to_list()
     
     if not courses:
         raise HTTPException(status_code=400, detail="No courses found for the specified program and semester.")
     if not faculty:
+        if gen_request.faculty_ids:
+            raise HTTPException(status_code=400, detail="No faculty found for the specified faculty IDs. Please check the selected faculty.")
         raise HTTPException(status_code=400, detail="No faculty found. Please add faculty before generating a timetable.")
     if not rooms:
         raise HTTPException(status_code=400, detail="No rooms found. Please add rooms/infrastructure before generating a timetable.")

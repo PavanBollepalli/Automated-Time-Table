@@ -11,6 +11,15 @@ class FacultyCreate(BaseModel):
     can_teach_course_ids: List[str] = []
     busy_slots: List[TimeSlot] = []
 
+class FacultyUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    max_load_hours: Optional[int] = None
+    can_teach_course_ids: Optional[List[str]] = None
+    busy_slots: Optional[List[TimeSlot]] = None
+
 class FacultyOut(BaseModel):
     id: str
     name: str

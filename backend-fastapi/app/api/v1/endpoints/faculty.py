@@ -8,7 +8,7 @@ from app.models.faculty import Faculty
 from app.models.users import User
 from app.models.courses import Course
 from app.models.timetable import Timetable, TimetableEntry
-from app.schemas.faculty import FacultyCreate, FacultyOut
+from app.schemas.faculty import FacultyCreate, FacultyOut, FacultyUpdate
 
 router = APIRouter()
 
@@ -74,6 +74,43 @@ async def create_faculty(
             logging.info(f"Updated existing user role to faculty: {faculty_in.email}")
 
     return _faculty_out(faculty, default_password=default_password)
+
+
+@router.put("/{id}")
+async def update_faculty(
+    id: PydanticObjectId,
+    faculty_in: FacultyUpdate,
+    current_user: User = Depends(deps.get_current_admin_user),
+) -> Any:
+    """
+    Update a faculty member. Only provided fields will be updated.
+    """
+    faculty = await Faculty.get(id)
+    if not faculty:
+        raise HTTPException(status_code=404, detail="Faculty not found.")
+
+    # Update only provided fields
+    update_data = faculty_in.model_dump(exclude_unset=True)
+    
+    # Handle can_teach_course_ids specially - convert to Course links
+    if "can_teach_course_ids" in update_data:
+        course_ids = update_data.get("can_teach_course_ids", [])
+        if course_ids:
+            courses = []
+            for cid in course_ids:
+                course = await Course.get(cid)
+                if course:
+                    courses.append(course)
+            faculty.can_teach = courses
+        del update_data["can_teach_course_ids"]
+    
+    # Update other fields
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(faculty, field, value)
+    
+    await faculty.save()
+    return _faculty_out(faculty)
 
 
 @router.get("/", response_model=List[FacultyOut])

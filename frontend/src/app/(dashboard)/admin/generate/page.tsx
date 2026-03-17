@@ -4,12 +4,13 @@ import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { getPrograms, getSemesters, generateTimetable } from "@/lib/api";
-import { Loader2, Zap, CheckCircle2, Users } from "lucide-react";
+import { getPrograms, getSemesters, generateTimetable, getFaculty } from "@/lib/api";
+import { Loader2, Zap, CheckCircle2, Users, UserCheck } from "lucide-react";
 
 export default function GeneratePage() {
   const [programs, setPrograms] = useState<any[]>([]);
   const [semesters, setSemesters] = useState<any[]>([]);
+  const [faculty, setFaculty] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
@@ -18,10 +19,11 @@ export default function GeneratePage() {
   const [batchId, setBatchId] = useState("");
   const [semesterId, setSemesterId] = useState("");
   const [selectedSectionIds, setSelectedSectionIds] = useState<string[]>([]);
+  const [selectedFacultyIds, setSelectedFacultyIds] = useState<string[]>([]);
 
   useEffect(() => {
-    Promise.all([getPrograms(), getSemesters()])
-      .then(([p, s]) => { setPrograms(p); setSemesters(s); })
+    Promise.all([getPrograms(), getSemesters(), getFaculty()])
+      .then(([p, s, f]) => { setPrograms(p); setSemesters(s); setFaculty(f); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
@@ -37,12 +39,19 @@ export default function GeneratePage() {
     );
   };
 
+  const toggleFaculty = (id: string) => {
+    setSelectedFacultyIds((prev) =>
+      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+    );
+  };
+
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
     setGenerating(true); setError(""); setSuccess("");
     try {
       const sectionIds = selectedSectionIds.length > 0 ? selectedSectionIds : undefined;
-      const result = await generateTimetable(programId, batchId, semesterId, sectionIds);
+      const facultyIds = selectedFacultyIds.length > 0 ? selectedFacultyIds : undefined;
+      const result = await generateTimetable(programId, batchId, semesterId, sectionIds, facultyIds);
       const sectionCount = sectionIds?.length || sections.length || 1;
       setSuccess(
         sectionCount > 1
@@ -124,6 +133,44 @@ export default function GeneratePage() {
             {batchId && sections.length === 0 && (
               <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-200 text-xs text-yellow-800">
                 No sections found for this batch. A single timetable will be generated for the entire batch. Add sections in the Programs page for per-section scheduling.
+              </div>
+            )}
+
+            {/* Faculty Selection */}
+            {batchId && (
+              <div className="space-y-2">
+                <Label>
+                  Faculty <span className="text-muted-foreground text-xs font-normal">(select specific faculty or leave empty for all)</span>
+                </Label>
+                {faculty.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No faculty available. Add faculty first.</p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-2 p-3 border rounded-md max-h-48 overflow-y-auto">
+                      {faculty.map((f: any) => (
+                        <button
+                          type="button"
+                          key={f.id}
+                          onClick={() => toggleFaculty(f.id)}
+                          className={`text-xs px-3 py-1.5 rounded-full border transition-colors flex items-center gap-1 ${
+                            selectedFacultyIds.includes(f.id)
+                              ? "bg-primary text-white border-primary"
+                              : "bg-muted/40 hover:bg-muted"
+                          }`}
+                        >
+                          <UserCheck className="h-3 w-3" />
+                          {f.name}
+                          <span className="opacity-70 text-xs">({f.designation})</span>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {selectedFacultyIds.length === 0
+                        ? `All ${faculty.length} faculty will be used for scheduling`
+                        : `${selectedFacultyIds.length} faculty(s) selected`}
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
